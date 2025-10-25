@@ -135,7 +135,7 @@ def generate_retrieval_metadata(query_context: Dict[str, Any], user_tenant: str)
     metadata = []
     
     # Simulate documents that might be retrieved
-    target_tenant = query_context.get("target_tenant", user_tenant)
+    target_tenant = query_context.get("target_tenant") or user_tenant  # Default to user tenant if None
     topics = query_context.get("topics", [])
     
     # Generate mock embeddings with different tenants and sensitivities
@@ -149,8 +149,8 @@ def generate_retrieval_metadata(query_context: Dict[str, Any], user_tenant: str)
             "retrieval_score": 0.9 - (i * 0.1)
         })
     
-    # Add some cross-tenant documents to test isolation
-    if target_tenant != user_tenant:
+    # Add some cross-tenant documents to test isolation (only if explicitly targeting different tenant)
+    if target_tenant != user_tenant and query_context.get("target_tenant"):
         metadata.append({
             "embedding_id": f"emb-cross-001",
             "tenant_id": user_tenant,
@@ -191,9 +191,10 @@ def rlsa_guard_comprehensive(user_context: Dict[str, Any], query_context: Dict[s
         })
         policy_context["rules_applied"].append("TenantIsolationPolicy")
     
-    # 2. Topic Scope Check
+    # 2. Topic Scope Check (case-insensitive)
     allowed_topics = TENANT_POLICIES.get(user_tenant, {}).get("topics", [])
-    forbidden_topics = [topic for topic in topics if topic not in allowed_topics]
+    allowed_topics_lower = [topic.lower() for topic in allowed_topics]
+    forbidden_topics = [topic for topic in topics if topic.lower() not in allowed_topics_lower]
     
     if forbidden_topics:
         violations.append({
