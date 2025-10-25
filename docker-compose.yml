@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # Redis for distributed rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: vecsec-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Flask Proxy with DDoS Protection
+  flask-proxy:
+    build: .
+    container_name: vecsec-proxy
+    ports:
+      - "8080:8080"
+    environment:
+      # Basic Configuration
+      - DEFAULT_TARGET_URL=https://httpbin.org
+      - ALLOWED_HOSTS=
+      - BLOCKED_PATHS=
+      
+      # DDoS Protection Configuration
+      - DDOS_REQUESTS_PER_MINUTE=100
+      - DDOS_REQUESTS_PER_HOUR=2000
+      - DDOS_REQUESTS_PER_DAY=20000
+      - DDOS_MAX_CONNECTIONS=20
+      - DDOS_MAX_REQUEST_SIZE=10485760  # 10MB
+      - DDOS_MAX_HEADER_SIZE=8192       # 8KB
+      - DDOS_REQUEST_TIMEOUT=30
+      - DDOS_SLOW_REQUEST_THRESHOLD=10
+      - DDOS_BLOCK_DURATION=300         # 5 minutes
+      - DDOS_MAX_VIOLATIONS=5
+      
+      # Redis Configuration
+      - DDOS_REDIS_ENABLED=true
+      - DDOS_REDIS_URL=redis://redis:6379/0
+      
+      # IP Management
+      - DDOS_ALLOWLIST=
+      - DDOS_BLOCKLIST=
+      
+      # Logging
+      - LOG_LEVEL=INFO
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Redis Commander for Redis management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: vecsec-redis-commander
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+volumes:
+  redis_data:
+
+networks:
+  default:
+    name: vecsec-network
