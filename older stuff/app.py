@@ -353,7 +353,6 @@ if __name__ == '__main__':
     print("  POST /analyze")
     print("  POST /scan")
     print("  GET  /patterns")
-    print("  POST /threat-analyze - Comprehensive threat analysis")
     print("\n🛡️ DDoS Protection Admin endpoints:")
     print("  GET  /admin/ddos/stats")
     print("  GET  /admin/ddos/ips")
