@@ -1,0 +1,25 @@
+# Core dependencies (required)
+flask>=2.3.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+torch>=2.0.0
+transformers>=4.30.0
+scikit-learn>=1.3.0
+joblib>=1.3.0
+numpy>=1.24.0
+
+# Optional dependencies for enhanced threat detection
+# Install with: pip install -r requirements-optional.txt
+
+# For advanced threat detection
+# ghostai>=1.0.0
+
+# For YARA pattern matching
+# yara-python>=4.3.0
+
+# For PII detection
+# presidio-analyzer>=2.2.0
+# presidio-anonymizer>=2.2.0
+
+# For DDoS protection with Redis
+# redis>=4.6.0
