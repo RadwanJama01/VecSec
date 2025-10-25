@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # VecSec Red Team Framework
+  red-team:
+    build:
+      context: .
+      dockerfile: Dockerfile.redteam
+    container_name: vecsec-red-team
+    ports:
+      - "5001:5001"  # Analytics dashboard
+    volumes:
+      - ./logs:/app/logs
+      - ./synthetic_data:/app/synthetic_data
+      - ./exports:/app/exports
+      - ./attack_logs.db:/app/attack_logs.db
+    environment:
+      - TARGET_ENDPOINT=http://vecsec-agent:8080
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - vecsec-agent
+      - redis
+    networks:
+      - vecsec-network
+    restart: unless-stopped
+
+  # VecSec Agent (target for testing)
+  vecsec-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vecsec-agent
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+    networks:
+      - vecsec-network
+    restart: unless-stopped
+
+  # Redis for rate limiting and caching
+  redis:
+    image: redis:7-alpine
+    container_name: vecsec-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - vecsec-network
+    restart: unless-stopped
+
+  # Sandbox network for isolated attack execution
+  sandbox-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+
+volumes:
+  redis_data:
+
+networks:
+  vecsec-network:
+    driver: bridge
