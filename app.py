@@ -3,7 +3,13 @@ import requests
 import logging
 from urllib.parse import urljoin, urlparse
 import json
+import os
+from dotenv import load_dotenv
 from malware_bert import MalwareBERTDetector, ThreatLevel
+from ddos_protection import create_ddos_protection
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -12,9 +18,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-DEFAULT_TARGET_URL = "https://httpbin.org"  # Default target for testing
-ALLOWED_HOSTS = []  # Empty list means allow all hosts
-BLOCKED_PATHS = []  # Paths to block
+DEFAULT_TARGET_URL = os.getenv('DEFAULT_TARGET_URL', "https://httpbin.org")
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',') if os.getenv('ALLOWED_HOSTS') else []
+BLOCKED_PATHS = os.getenv('BLOCKED_PATHS', '').split(',') if os.getenv('BLOCKED_PATHS') else []
+
+# Initialize DDoS Protection
+ddos_protection = create_ddos_protection(app)
+logger.info("DDoS protection system initialized")
 
 # Initialize Malware-BERT detector
 try:
@@ -207,6 +217,7 @@ def config():
     })
 
 @app.route('/analyze', methods=['POST'])
+@ddos_protection.limiter.limit("10 per minute", methods=["POST"])
 def analyze_malware():
     """Analyze text content for malware"""
     if not malware_detector:
@@ -236,6 +247,7 @@ def analyze_malware():
         return jsonify({'error': 'Analysis failed'}), 500
 
 @app.route('/scan', methods=['POST'])
+@ddos_protection.limiter.limit("5 per minute", methods=["POST"])
 def scan_file():
     """Scan file content for malware"""
     if not malware_detector:
@@ -281,14 +293,27 @@ def get_patterns():
     return jsonify(patterns)
 
 if __name__ == '__main__':
-    print("Flask Proxy Server")
-    print("=================")
+    print("Flask Proxy Server with DDoS Protection")
+    print("=======================================")
     print(f"Default target URL: {DEFAULT_TARGET_URL}")
-    print("Usage examples:")
+    print(f"DDoS Protection: ENABLED")
+    print(f"Redis Distributed Limiting: {'ENABLED' if ddos_protection.config.redis_enabled else 'DISABLED'}")
+    print(f"Rate Limits: {ddos_protection.config.requests_per_minute}/min, {ddos_protection.config.requests_per_hour}/hour")
+    print(f"Max Connections per IP: {ddos_protection.config.max_concurrent_connections}")
+    print(f"Max Request Size: {ddos_protection.config.max_request_size // (1024*1024)}MB")
+    print("\nUsage examples:")
     print("  GET  /?target=https://api.github.com/users/octocat")
     print("  POST /?target=https://httpbin.org/post")
     print("  GET  /health")
     print("  GET  /config")
+    print("\nDDoS Admin endpoints:")
+    print("  GET  /admin/ddos/stats")
+    print("  GET  /admin/ddos/ips")
+    print("  POST /admin/ddos/block/<ip>")
+    print("  POST /admin/ddos/unblock/<ip>")
+    print("  POST /admin/ddos/allowlist/<ip>")
+    print("  POST /admin/ddos/blocklist/<ip>")
+    print("  GET/POST /admin/ddos/config")
     print("\nStarting server on http://localhost:8080")
     
     app.run(host='0.0.0.0', port=8080, debug=True)
