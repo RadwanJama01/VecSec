@@ -137,13 +137,49 @@ def rag_with_rlsa(user_id, tenant_id, clearance, query):
     # Step 1: RLSA Enforcement
     decision = rlsa_guard(tenant_id, clearance, query)
     if decision is not True:
+        # Add success field to denial response
+        decision["success"] = False
         print(json.dumps(decision, indent=2))
-        return
+        return False
 
     # Step 2: Proceed with RAG
     result = graph.invoke({"question": query})
-    print("✅ Secure Answer:", result["answer"])
+    
+    # Create success response in JSON format
+    success_response = {
+        "success": True,
+        "status": "ALLOWED",
+        "action": "PROCESS",
+        "user_id": user_id,
+        "tenant_id": tenant_id,
+        "clearance": clearance,
+        "query": query,
+        "answer": result["answer"],
+        "timestamp": datetime.utcnow().isoformat(),
+        "incident_id": str(uuid.uuid4())
+    }
+    
+    print(json.dumps(success_response, indent=2))
+    return True
 
-# --- Example Usage
-rag_with_rlsa("dave", "tenantA", "INTERNAL", "Explain RAG retrieval process")
-rag_with_rlsa("dave", "tenantA", "INTERNAL", "Explain finance embeddings")
+# --- CLI Interface
+import sys
+import argparse
+
+def main():
+    parser = argparse.ArgumentParser(description='RLSA-Secured RAG CLI')
+    parser.add_argument('prompt', help='The question/prompt to process')
+    parser.add_argument('--user-id', default='user', help='User ID (default: user)')
+    parser.add_argument('--tenant-id', default='tenantA', help='Tenant ID (default: tenantA)')
+    parser.add_argument('--clearance', default='INTERNAL', help='Clearance level (default: INTERNAL)')
+    
+    args = parser.parse_args()
+    
+    # Process the query
+    result = rag_with_rlsa(args.user_id, args.tenant_id, args.clearance, args.prompt)
+    
+    # Return appropriate exit code
+    sys.exit(0 if result else 1)
+
+if __name__ == "__main__":
+    main()
