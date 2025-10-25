@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 from malware_bert import MalwareBERTDetector, ThreatLevel
 from ddos_protection import create_ddos_protection
+from vector_security_api import init_vector_security_api
 
 # Load environment variables
 load_dotenv()
@@ -25,6 +26,10 @@ BLOCKED_PATHS = os.getenv('BLOCKED_PATHS', '').split(',') if os.getenv('BLOCKED_
 # Initialize DDoS Protection
 ddos_protection = create_ddos_protection(app)
 logger.info("DDoS protection system initialized")
+
+# Initialize Vector Security API
+init_vector_security_api(app)
+logger.info("Vector Security API initialized")
 
 # Initialize Malware-BERT detector
 try:
@@ -293,20 +298,26 @@ def get_patterns():
     return jsonify(patterns)
 
 if __name__ == '__main__':
-    print("Flask Proxy Server with DDoS Protection")
-    print("=======================================")
+    print("🛡️ VecSec - Advanced Security Proxy with Vector Pipeline Protection")
+    print("==================================================================")
     print(f"Default target URL: {DEFAULT_TARGET_URL}")
+    print(f"Malware Detection: {'ENABLED' if malware_detector else 'DISABLED'}")
     print(f"DDoS Protection: ENABLED")
+    print(f"Vector Security: ENABLED")
     print(f"Redis Distributed Limiting: {'ENABLED' if ddos_protection.config.redis_enabled else 'DISABLED'}")
     print(f"Rate Limits: {ddos_protection.config.requests_per_minute}/min, {ddos_protection.config.requests_per_hour}/hour")
     print(f"Max Connections per IP: {ddos_protection.config.max_concurrent_connections}")
     print(f"Max Request Size: {ddos_protection.config.max_request_size // (1024*1024)}MB")
-    print("\nUsage examples:")
+    print("\n🔧 Core Proxy endpoints:")
     print("  GET  /?target=https://api.github.com/users/octocat")
     print("  POST /?target=https://httpbin.org/post")
     print("  GET  /health")
     print("  GET  /config")
-    print("\nDDoS Admin endpoints:")
+    print("\n🤖 Malware Detection endpoints:")
+    print("  POST /analyze")
+    print("  POST /scan")
+    print("  GET  /patterns")
+    print("\n🛡️ DDoS Protection Admin endpoints:")
     print("  GET  /admin/ddos/stats")
     print("  GET  /admin/ddos/ips")
     print("  POST /admin/ddos/block/<ip>")
@@ -314,6 +325,16 @@ if __name__ == '__main__':
     print("  POST /admin/ddos/allowlist/<ip>")
     print("  POST /admin/ddos/blocklist/<ip>")
     print("  GET/POST /admin/ddos/config")
-    print("\nStarting server on http://localhost:8080")
+    print("\n🔬 Vector Security endpoints:")
+    print("  POST /api/vector/query")
+    print("  POST /api/vector/embedding/insert")
+    print("  POST /api/vector/embedding/retrieve")
+    print("  GET  /api/vector/policy/<tenant_id>")
+    print("  POST /api/vector/policy/create")
+    print("  GET  /api/vector/security/report")
+    print("  GET  /api/vector/security/incidents")
+    print("  GET  /api/vector/sessions")
+    print("  GET  /api/vector/health")
+    print("\n🚀 Starting server on http://localhost:8080")
     
     app.run(host='0.0.0.0', port=8080, debug=True)

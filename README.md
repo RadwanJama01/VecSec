@@ -84,6 +84,42 @@ VecSec uses advanced AI to detect and block malicious content in real-time:
 2. **ML-Based Detection**: BERT transformer model trained on malware samples  
 3. **Combined Analysis**: Both methods working together for maximum accuracy
 
+## 🎯 Vector Security Threat Classes
+
+VecSec protects against **10 critical threat classes** targeting vector databases and AI/ML pipelines:
+
+| Threat Class | Severity | Description | Defense |
+|--------------|----------|-------------|---------|
+| **Embedding Exfiltration** | High | Querying similar vectors to leak restricted data | RLS + Metadata Tagging |
+| **Cross-Tenant Poisoning** | Critical | Injecting adversarial vectors to influence others | Embedding Tagging + Validation |
+| **Prompt Injection** | High | Manipulating retrieval via crafted queries | Malware-BERT + Sanitization |
+| **Reconstruction Attacks** | Critical | Reverse-engineering embeddings to recover text | Sensitivity Classification + Policy |
+| **Semantic Leakage** | High | Exploiting semantic relationships for inference | Semantic Filtering + Topic Blocking |
+| **Adversarial Queries** | Medium | Crafting queries to exploit model vulnerabilities | Adversarial Detection + Validation |
+| **Privacy Inference** | High | Inferring private info through similarity analysis | Privacy-Preserving Techniques |
+| **Model Poisoning** | Critical | Injecting malicious embeddings to corrupt models | Embedding Validation + Integrity |
+| **Data Syphoning** | High | Systematic data extraction through repeated queries | Rate Limiting + Pattern Analysis |
+| **Attribution Attacks** | Critical | Manipulating metadata to hide data attribution | Metadata Integrity + Verification |
+
+### 🛡️ Multi-Layer Defense Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    VecSec Defense Layers                    │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 1: Malware-BERT Detection (Pattern + ML)             │
+│ Layer 2: Semantic Topic Analysis (Financial, Personal, IP) │
+│ Layer 3: Query Complexity Analysis (Sophistication Check)  │
+│ Layer 4: Prompt Injection Detection (AI Manipulation)      │
+│ Layer 5: Advanced Threat Classification (10 Threat Classes)│
+│ Layer 6: RLS Policy Enforcement (Tenant Isolation)         │
+│ Layer 7: Embedding Metadata Tagging (Security Context)     │
+│ Layer 8: Retrieval Validation (Post-Query Security)        │
+│ Layer 9: Access Pattern Monitoring (Behavioral Analysis)   │
+│ Layer 10: Adaptive Learning (Policy Evolution)             │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ## 🛡️ DDoS Protection Features
 
 VecSec provides enterprise-grade DDoS protection with multiple layers of defense:
