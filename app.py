@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from malware_bert import MalwareBERTDetector, ThreatLevel
 from ddos_protection import create_ddos_protection
 from vector_security_api import init_vector_security_api
+from threat_detection import analyze_threat
 
 # Load environment variables
 load_dotenv()
@@ -297,6 +298,41 @@ def get_patterns():
     
     return jsonify(patterns)
 
+@app.route('/threat-analyze', methods=['POST'])
+@ddos_protection.limiter.limit("5 per minute", methods=["POST"])
+def threat_analyze():
+    """Comprehensive threat analysis using all detection methods"""
+    try:
+        data = request.get_json()
+        if not data or 'content' not in data:
+            return jsonify({'error': 'Content field required'}), 400
+        
+        content = data['content']
+        
+        # Perform comprehensive threat analysis
+        result = analyze_threat(content)
+        
+        # Return appropriate HTTP status based on action
+        if result['action'] == 'block':
+            return jsonify({
+                'error': 'Content blocked due to high threat level',
+                'analysis': result
+            }), 403
+        elif result['action'] == 'warn':
+            return jsonify({
+                'warning': 'Suspicious content detected',
+                'analysis': result
+            }), 200
+        else:
+            return jsonify({
+                'status': 'clean',
+                'analysis': result
+            }), 200
+        
+    except Exception as e:
+        logger.error(f"Threat analysis failed: {e}")
+        return jsonify({'error': 'Analysis failed'}), 500
+
 if __name__ == '__main__':
     print("🛡️ VecSec - Advanced Security Proxy with Vector Pipeline Protection")
     print("==================================================================")
@@ -317,6 +353,7 @@ if __name__ == '__main__':
     print("  POST /analyze")
     print("  POST /scan")
     print("  GET  /patterns")
+    print("  POST /threat-analyze - Comprehensive threat analysis")
     print("\n🛡️ DDoS Protection Admin endpoints:")
     print("  GET  /admin/ddos/stats")
     print("  GET  /admin/ddos/ips")
