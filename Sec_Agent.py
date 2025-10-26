@@ -1,5 +1,5 @@
 from datetime import datetime
-import uuid, json, re
+import uuid, json, re, os
 from typing import List, TypedDict, Literal, Dict, Any
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_core.documents import Document
@@ -7,9 +7,166 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.messages import BaseMessage
 from langgraph.graph import StateGraph, START
+import requests
+import numpy as np
+from dotenv import load_dotenv
 
-# Mock LLM for demonstration
-class MockLLM(BaseLanguageModel):
+# Load environment variables
+load_dotenv()
+
+# --- BaseTen Qwen3 Embedding System ---
+class QwenEmbeddingClient:
+    """BaseTen Qwen3 embedding client"""
+    
+    def __init__(self, model_id: str = None, api_key: str = None):
+        self.model_id = model_id or os.getenv("BASETEN_MODEL_ID")
+        self.api_key = api_key or os.getenv("BASETEN_API_KEY")
+        
+        if not self.model_id or not self.api_key:
+            print("⚠️  BaseTen API credentials not set. Embedding-based detection disabled.")
+            self.enabled = False
+        else:
+            self.base_url = f"https://api.baseten.co/v1/models/{self.model_id}/predict"
+            self.headers = {
+                "Authorization": f"Api-Key {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            self.enabled = True
+    
+    def get_embedding(self, text: str) -> np.ndarray:
+        """Get embedding from BaseTen Qwen3 8B model"""
+        if not self.enabled:
+            # Return random embedding as fallback
+            return np.random.rand(768)
+        
+        try:
+            payload = {
+                "inputs": text,
+                "parameters": {
+                    "task": "embedding",
+                    "max_length": 512
+                }
+            }
+            
+            response = requests.post(
+                self.base_url,
+                json=payload,
+                headers=self.headers,
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                embedding = np.array(result["output"])
+                return embedding
+            else:
+                print(f"⚠️  BaseTen API error: {response.status_code}")
+                return np.random.rand(768)
+        except Exception as e:
+            print(f"⚠️  BaseTen embedding failed: {e}")
+            return np.random.rand(768)
+
+class ContextualThreatEmbedding:
+    """Maintains context while creating embeddings for threats"""
+    
+    def __init__(self, qwen_client: QwenEmbeddingClient):
+        self.qwen = qwen_client
+        self.learned_patterns = []
+        
+    def create_contextual_prompt(self, query: str, role: str, clearance: str, 
+                                 tenant_id: str, attack_type: str = None, 
+                                 attack_metadata: Dict = None) -> str:
+        """Create structured prompt for embeddings"""
+        
+        contextual_prompt = f"""ROLE: {role}
+CLEARANCE: {clearance}
+TENANT: {tenant_id}
+QUERY: {query}"""
+        
+        if attack_type:
+            contextual_prompt += f"\nATTACK_TYPE: {attack_type}"
+        
+        if attack_metadata:
+            severity = attack_metadata.get('config', {}).get('severity', 'UNKNOWN')
+            intent = attack_metadata.get('attack_intent', 'unknown')
+            contextual_prompt += f"\nSEVERITY: {severity}\nINTENT: {intent}"
+        
+        return contextual_prompt.strip()
+    
+    def learn_threat_pattern(self, query: str, user_context: Dict, 
+                            attack_metadata: Dict = None, was_blocked: bool = False):
+        """Learn a threat pattern with full context"""
+        
+        prompt = self.create_contextual_prompt(
+            query=query,
+            role=user_context.get('role', 'analyst'),
+            clearance=user_context.get('clearance', 'INTERNAL'),
+            tenant_id=user_context.get('tenant_id', 'tenantA'),
+            attack_type=attack_metadata.get('attack_type') if attack_metadata else None,
+            attack_metadata=attack_metadata
+        )
+        
+        embedding = self.qwen.get_embedding(prompt)
+        
+        pattern = {
+            'embedding': embedding,
+            'query': query,
+            'user_context': user_context,
+            'attack_metadata': attack_metadata,
+            'was_blocked': was_blocked,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        self.learned_patterns.append(pattern)
+        return pattern
+    
+    def check_semantic_threat(self, query: str, user_context: Dict, 
+                             similarity_threshold: float = 0.85) -> tuple:
+        """Check if query is semantically similar to known threats"""
+        
+        if not self.learned_patterns:
+            return False, {}
+        
+        # Create contextual prompt
+        prompt = self.create_contextual_prompt(
+            query=query,
+            role=user_context.get('role', 'analyst'),
+            clearance=user_context.get('clearance', 'INTERNAL'),
+            tenant_id=user_context.get('tenant_id', 'tenantA')
+        )
+        
+        # Get embedding for query
+        query_embedding = self.qwen.get_embedding(prompt)
+        
+        # Check similarity against learned patterns
+        for pattern in self.learned_patterns:
+            if pattern.get('was_blocked', True):  # Only check blocked patterns
+                try:
+                    similarity = np.dot(query_embedding, pattern['embedding']) / (
+                        np.linalg.norm(query_embedding) * np.linalg.norm(pattern['embedding'])
+                    )
+                    
+                    if similarity > similarity_threshold:
+                        return True, {
+                            'threat_detected': True,
+                            'similarity_score': float(similarity),
+                            'matched_pattern': pattern['query'][:100],
+                            'detection_method': 'semantic_similarity'
+                        }
+                except:
+                    continue
+        
+        return False, {'detection_method': 'semantic_similarity'}
+
+# Initialize BaseTen Qwen3
+qwen_client = QwenEmbeddingClient()
+threat_embedder = ContextualThreatEmbedding(qwen_client)
+
+# --- Mock LLM for demonstration - simplified without abstract base class ---
+class MockLLM:
+    def __init__(self):
+        pass
+    
     def _generate(self, messages, **kwargs):
         # Simple mock response based on the question
         question = messages[-1].content if messages else "No question provided"
@@ -249,6 +406,23 @@ def rlsa_guard_comprehensive(user_context: Dict[str, Any], query_context: Dict[s
     # Get role policy
     role_policy = ROLE_POLICIES.get(user_role, ROLE_POLICIES["guest"])
     
+    # SEMANTIC THREAT DETECTION (new layer)
+    # Check if query is semantically similar to known attack patterns
+    query = query_context.get("query", "")
+    is_semantic_threat, semantic_result = threat_embedder.check_semantic_threat(query, user_context)
+    
+    if is_semantic_threat:
+        violations.append({
+            "type": "semantic_threat",
+            "rule": "SemanticSimilarityDetection",
+            "severity": "HIGH",
+            "message": f"Query matches known attack pattern (similarity: {semantic_result.get('similarity_score', 0):.2f})",
+            "similarity_score": semantic_result.get('similarity_score'),
+            "matched_pattern": semantic_result.get('matched_pattern'),
+            "detection_method": "semantic_similarity"
+        })
+        policy_context["rules_applied"].append("SemanticSimilarityDetection")
+    
     policy_context = {
         "user_tenant": user_tenant,
         "target_tenant": target_tenant,
@@ -477,6 +651,24 @@ def rag_with_rlsa(user_id, tenant_id, clearance, query, role="analyst"):
         decision["query_context"] = query_context
         decision["retrieval_metadata"] = retrieval_metadata
         print(json.dumps(decision, indent=2))
+        
+        # LEARN FROM BLOCKED ATTACK: Add to threat embedding patterns
+        if query_context.get("detected_threats"):
+            # Extract attack metadata if available
+            attack_metadata = {
+                "attack_type": query_context.get("detected_threats", [""])[0] if query_context.get("detected_threats") else "unknown",
+                "config": {"severity": "HIGH"},
+                "attack_intent": f"User query blocked by security system"
+            }
+            
+            # Learn the pattern
+            threat_embedder.learn_threat_pattern(
+                query=query,
+                user_context=user_context,
+                attack_metadata=attack_metadata,
+                was_blocked=True
+            )
+        
         return False
 
     # Step 3: Proceed with RAG (only if all checks pass)

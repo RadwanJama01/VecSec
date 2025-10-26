@@ -1,0 +1,13 @@
+apiVersion: 1
+
+providers:
+  - name: 'VecSec Dashboards'
+    orgId: 1
+    folder: 'VecSec'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+
