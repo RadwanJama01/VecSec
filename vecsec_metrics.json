@@ -1,0 +1,19 @@
+{
+  "timestamp": "2025-10-26T16:23:50.575323",
+  "detection_accuracy": 0,
+  "block_rate": 0,
+  "approval_rate": 0,
+  "system_health": 0,
+  "system_uptime": 0,
+  "requests_per_second": 0,
+  "total_requests_allowed": 0,
+  "total_requests_blocked": 0,
+  "files_blocked": 0,
+  "files_approved": 0,
+  "attacks_blocked": 0,
+  "threats_detected": 0,
+  "rlsa_violations": 0,
+  "patterns_learned": 0,
+  "embeddings_generated": 0,
+  "model_updates": 0
+}

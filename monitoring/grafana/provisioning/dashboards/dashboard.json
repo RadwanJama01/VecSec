@@ -1,0 +1,161 @@
+{
+  "dashboard": {
+    "title": "VecSec Security Dashboard",
+    "tags": ["vecsec", "security"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Detection Accuracy",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "vecsec_detection_accuracy",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4}
+      },
+      {
+        "id": 2,
+        "title": "Average Response Time",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(vecsec_request_duration_seconds_sum[5m]) / rate(vecsec_request_duration_seconds_count[5m]) * 1000",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms"
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Requests Per Second",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(vecsec_requests_total[5m])",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 4}
+      },
+      {
+        "id": 4,
+        "title": "Files Processed Over Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(vecsec_files_processed_total[5m])",
+            "legendFormat": "{{action}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8}
+      },
+      {
+        "id": 5,
+        "title": "Threats Detected",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(vecsec_threats_detected_total[5m])",
+            "legendFormat": "{{threat_type}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8}
+      },
+      {
+        "id": 6,
+        "title": "Threats Blocked Over Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(vecsec_attacks_blocked_total[5m])",
+            "legendFormat": "{{attack_type}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8}
+      },
+      {
+        "id": 7,
+        "title": "Security Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "vecsec_system_health",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"x": 12, "y": 12, "w": 6, "h": 4}
+      },
+      {
+        "id": 8,
+        "title": "System Uptime",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "vecsec_system_uptime_seconds",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"x": 18, "y": 12, "w": 6, "h": 4},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Total Files Blocked",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "vecsec_files_processed_total{action='blocked'}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"x": 0, "y": 20, "w": 6, "h": 4}
+      },
+      {
+        "id": 10,
+        "title": "Total Files Approved",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "vecsec_files_processed_total{action='approved'}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"x": 6, "y": 20, "w": 6, "h": 4}
+      },
+      {
+        "id": 11,
+        "title": "Block Rate",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "vecsec_block_rate",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"x": 12, "y": 20, "w": 6, "h": 4},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "max": 100
+          }
+        }
+      }
+    ]
+  }
+}
+

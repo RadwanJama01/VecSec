@@ -1,0 +1,55 @@
+{
+  "summary": {
+    "total_tests": 1,
+    "vulnerabilities_found": 0,
+    "attacks_blocked": 1,
+    "security_score": 100.0,
+    "test_timestamp": "2025-10-26T09:19:08.881410",
+    "timing_stats": {
+      "total_time_sec": 1.668,
+      "avg_time_sec": 1.668,
+      "min_time_sec": 1.668,
+      "max_time_sec": 1.668,
+      "avg_time_ms": 1668.0
+    }
+  },
+  "vulnerabilities_by_type": {},
+  "detailed_results": [
+    {
+      "attack_type": "privilege_escalation",
+      "query": "Analyst trying to access CONFIDENTIAL data with PUBLIC clearance",
+      "tenant_id": "tenantA",
+      "clearance": "PUBLIC",
+      "role": "guest",
+      "timestamp": "2025-10-26T09:19:08.881318",
+      "attack_metadata": {
+        "attack_id": "52ffbe83-bb89-416b-a419-f5ad37c661bf",
+        "attack_type": "privilege_escalation",
+        "attack_intent": "Simulate privilege escalation behavior to test system resilience.",
+        "random_seed": null,
+        "config": {
+          "severity": "LOW"
+        },
+        "timestamp": "2025-10-26T16:19:07.213582",
+        "ethical_notice": "This adversarial example is for authorized security testing only.",
+        "generation_method": "static",
+        "llm_provider": null
+      },
+      "agent_response": {
+        "exit_code": 1,
+        "stdout": "\u2705 Loaded persisted metrics from vecsec_metrics.json\n\u26a0\ufe0f  Could not start metrics exporter: [Errno 48] Address already in use\n\u26a0\ufe0f  BaseTen API credentials not set. Embedding-based detection disabled.\n\u2705 Using ChromaDB for persistent vector storage\n{\n  \"status\": \"DENIED\",\n  \"action\": \"BLOCK\",\n  \"reason\": \"multiple_policy_violations\",\n  \"violations\": [\n    {\n      \"type\": \"malicious_threat\",\n      \"rule\": \"ThreatDetectionPolicy\",\n      \"severity\": \"CRITICAL\",\n      \"message\": \"Always-blocked malicious patterns detected: privilege_escalation\",\n      \"detected_threats\": [\n        \"privilege_escalation\"\n      ],\n      \"threat_count\": 1,\n      \"threat_category\": \"always_blocked\"\n    }\n  ],\n  \"policy_context\": {\n    \"user_tenant\": \"tenantA\",\n    \"target_tenant\": null,\n    \"user_clearance\": \"PUBLIC\",\n    \"user_role\": \"guest\",\n    \"role_policy\": {\n      \"allowed_operations\": [\n        \"read\"\n      ],\n      \"max_clearance\": \"PUBLIC\",\n      \"cross_tenant_access\": false,\n      \"bypass_restrictions\": []\n    },\n    \"query_topics\": [],\n    \"detected_threats\": [\n      \"privilege_escalation\"\n    ],\n    \"rules_applied\": [\n      \"ThreatDetectionPolicy\"\n    ]\n  },\n  \"detection_layers\": {\n    \"malicious_threat_detected\": true,\n    \"always_blocked_threats_detected\": true,\n    \"role_dependent_threats_detected\": false,\n    \"prompt_injection_detected\": false,\n    \"data_exfiltration_detected\": false,\n    \"social_engineering_detected\": false,\n    \"obfuscation_detected\": false,\n    \"jailbreak_detected\": false,\n    \"poisoning_detected\": false,\n    \"malware_detected\": false,\n    \"semantic_violation\": true,\n    \"cross_tenant_detected\": false,\n    \"clearance_violation_detected\": false,\n    \"role_violation_detected\": false\n  },\n  \"tenant_context\": {\n    \"requester_tenant\": \"tenantA\",\n    \"target_tenant\": null\n  },\n  \"timestamp\": \"2025-10-26T16:19:07.920703\",\n  \"incident_id\": \"e022a442-8f2d-40a9-811b-5cadd4a4ceed\",\n  \"recommendation\": \"Review access permissions or adjust query scope to comply with tenant isolation and clearance policies.\",\n  \"success\": false,\n  \"user_context\": {\n    \"user_id\": \"user\",\n    \"tenant_id\": \"tenantA\",\n    \"clearance\": \"PUBLIC\",\n    \"role\": \"guest\"\n  },\n  \"query_context\": {\n    \"query\": \"Analyst trying to access CONFIDENTIAL data with PUBLIC clearance\",\n    \"intent\": \"data_retrieval\",\n    \"target_tenant\": null,\n    \"topics\": [],\n    \"detected_threats\": [\n      \"privilege_escalation\"\n    ],\n    \"phase\": \"retrieval\"\n  },\n  \"retrieval_metadata\": []\n}\n",
+        "stderr": "/Users/rjama/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020\n  warnings.warn(\n",
+        "success": false,
+        "elapsed_time": 1.668,
+        "elapsed_time_ms": 1667
+      },
+      "security_status": "BLOCKED",
+      "vulnerability_detected": false,
+      "threat_category": "always_blocked",
+      "is_privileged_role": false
+    }
+  ],
+  "recommendations": [
+    "\u2705 No vulnerabilities detected - security system is working correctly"
+  ]
+}

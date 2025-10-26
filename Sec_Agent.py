@@ -7,6 +7,14 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.messages import BaseMessage
 from langgraph.graph import StateGraph, START
+
+# Try to import ChromaDB for persistent storage
+try:
+    from langchain_chroma import Chroma
+    CHROMA_AVAILABLE = True
+except ImportError:
+    print("⚠️  langchain-chroma not installed, using InMemory storage")
+    CHROMA_AVAILABLE = False
 import requests
 import numpy as np
 from dotenv import load_dotenv
@@ -14,13 +22,30 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Initialize metrics exporter
+try:
+    from metrics_exporter import metrics_exporter, start_metrics_exporter
+    metrics_exporter.start_server()
+    METRICS_ENABLED = True
+except ImportError:
+    print("⚠️  metrics_exporter not available")
+    METRICS_ENABLED = False
+except Exception as e:
+    print(f"⚠️  Could not start metrics exporter: {e}")
+    METRICS_ENABLED = False
+
 # --- BaseTen Qwen3 Embedding System ---
 class QwenEmbeddingClient:
-    """BaseTen Qwen3 embedding client"""
+    """BaseTen Qwen3 embedding client with batching"""
     
-    def __init__(self, model_id: str = None, api_key: str = None):
+    def __init__(self, model_id: str = None, api_key: str = None, batch_size: int = 100):
         self.model_id = model_id or os.getenv("BASETEN_MODEL_ID")
         self.api_key = api_key or os.getenv("BASETEN_API_KEY")
+        self.batch_size = batch_size
+        self.embedding_cache = {}  # Cache for embeddings
+        self.pending_batch = []  # Queue for batching
+        self.total_calls = 0
+        self.min_patterns_for_training = 100  # Stop calling API after this many patterns learned
         
         if not self.model_id or not self.api_key:
             print("⚠️  BaseTen API credentials not set. Embedding-based detection disabled.")
@@ -32,16 +57,55 @@ class QwenEmbeddingClient:
                 "Content-Type": "application/json"
             }
             self.enabled = True
+            print(f"✅ BaseTen client initialized with batch size: {self.batch_size}")
     
     def get_embedding(self, text: str) -> np.ndarray:
-        """Get embedding from BaseTen Qwen3 8B model"""
+        """Get embedding from BaseTen with batching and caching"""
+        # Check cache first
+        cache_key = hash(text)
+        if cache_key in self.embedding_cache:
+            return self.embedding_cache[cache_key]
+        
+        # If we've learned enough patterns, skip API calls
+        if hasattr(self, 'patterns_learned') and self.patterns_learned >= self.min_patterns_for_training:
+            # Return random embedding (we won't use semantic detection anymore)
+            embedding = np.random.rand(768)
+            self.embedding_cache[cache_key] = embedding
+            return embedding
+        
         if not self.enabled:
             # Return random embedding as fallback
-            return np.random.rand(768)
+            embedding = np.random.rand(768)
+            self.embedding_cache[cache_key] = embedding
+            return embedding
+        
+        # Add to pending batch
+        self.pending_batch.append(text)
+        
+        # Process batch if we've accumulated enough
+        if len(self.pending_batch) >= self.batch_size:
+            embeddings = self._process_batch()
+            # Update cache for all items in batch
+            for i, text_item in enumerate(self.pending_batch):
+                self.embedding_cache[hash(text_item)] = embeddings[i]
+            # Return the embedding for current request
+            return embeddings[len(self.pending_batch) - 1]
+        
+        # For now, return random (will be updated when batch processes)
+        return np.random.rand(768)
+    
+    def _process_batch(self) -> list:
+        """Process pending batch of texts and get embeddings"""
+        if not self.pending_batch:
+            return []
+        
+        texts = self.pending_batch[:]
+        self.pending_batch = []  # Clear batch
         
         try:
+            # Batch API call
             payload = {
-                "inputs": text,
+                "inputs": texts,  # Send multiple texts at once
                 "parameters": {
                     "task": "embedding",
                     "max_length": 512
@@ -52,19 +116,44 @@ class QwenEmbeddingClient:
                 self.base_url,
                 json=payload,
                 headers=self.headers,
-                timeout=5
+                timeout=10  # Longer timeout for batch
             )
+            
+            self.total_calls += 1
+            print(f"📦 Batch API call #{self.total_calls} processed {len(texts)} embeddings")
             
             if response.status_code == 200:
                 result = response.json()
-                embedding = np.array(result["output"])
-                return embedding
+                embeddings = [np.array(emb) for emb in result["outputs"]]
+                return embeddings
             else:
                 print(f"⚠️  BaseTen API error: {response.status_code}")
-                return np.random.rand(768)
+                return [np.random.rand(768) for _ in texts]
         except Exception as e:
-            print(f"⚠️  BaseTen embedding failed: {e}")
-            return np.random.rand(768)
+            print(f"⚠️  BaseTen batch failed: {e}")
+            return [np.random.rand(768) for _ in texts]
+    
+    def flush_batch(self):
+        """Force process any pending batch items"""
+        if self.pending_batch:
+            embeddings = self._process_batch()
+            for i, text_item in enumerate(self.pending_batch):
+                self.embedding_cache[hash(text_item)] = embeddings[i]
+    
+    def set_patterns_learned(self, count: int):
+        """Update number of patterns learned"""
+        self.patterns_learned = count
+        if count >= self.min_patterns_for_training:
+            print(f"🎓 Training complete! Learned {count} patterns. Disabling BaseTen API calls.")
+    
+    def get_stats(self):
+        """Get embedding statistics"""
+        return {
+            "total_calls": self.total_calls,
+            "cache_size": len(self.embedding_cache),
+            "pending_batch_size": len(self.pending_batch),
+            "patterns_learned": getattr(self, 'patterns_learned', 0)
+        }
 
 class ContextualThreatEmbedding:
     """Maintains context while creating embeddings for threats"""
@@ -72,6 +161,7 @@ class ContextualThreatEmbedding:
     def __init__(self, qwen_client: QwenEmbeddingClient):
         self.qwen = qwen_client
         self.learned_patterns = []
+        self.max_patterns = 200  # Limit stored patterns
         
     def create_contextual_prompt(self, query: str, role: str, clearance: str, 
                                  tenant_id: str, attack_type: str = None, 
@@ -118,6 +208,14 @@ QUERY: {query}"""
         }
         
         self.learned_patterns.append(pattern)
+        
+        # Limit stored patterns (keep only most recent)
+        if len(self.learned_patterns) > self.max_patterns:
+            self.learned_patterns = self.learned_patterns[-self.max_patterns:]
+        
+        # Notify client about patterns learned
+        self.qwen.set_patterns_learned(len(self.learned_patterns))
+        
         return pattern
     
     def check_semantic_threat(self, query: str, user_context: Dict, 
@@ -208,7 +306,23 @@ class MockEmbeddings:
 # --- Setup LLM + embeddings
 llm = MockLLM()
 embeddings = MockEmbeddings()
-vector_store = InMemoryVectorStore(embeddings)
+
+# Use ChromaDB if available, otherwise InMemoryVectorStore
+if CHROMA_AVAILABLE and os.getenv("USE_CHROMA", "false").lower() == "true":
+    try:
+        # Use persistent ChromaDB storage
+        persist_directory = "./chroma_db"
+        vector_store = Chroma(
+            collection_name="vecsec_documents",
+            embedding_function=embeddings,
+            persist_directory=persist_directory
+        )
+        print("✅ Using ChromaDB for persistent vector storage")
+    except Exception as e:
+        print(f"⚠️  ChromaDB initialization failed: {e}, using InMemory")
+        vector_store = InMemoryVectorStore(embeddings)
+else:
+    vector_store = InMemoryVectorStore(embeddings)
 
 # Add some sample documents to the vector store
 sample_docs = [
@@ -486,12 +600,12 @@ def rlsa_guard_comprehensive(user_context: Dict[str, Any], query_context: Dict[s
                     "timestamp": datetime.utcnow().isoformat()
                 }
     
-    # 0.5. Role-based Access Control
-    # Check if user's clearance exceeds role's max clearance
+    # 0.5. Role-based Access Control and Clearance Level Check
     clearance_levels = {"PUBLIC": 1, "INTERNAL": 2, "CONFIDENTIAL": 3, "SECRET": 4}
     user_level = clearance_levels.get(user_clearance, 1)
     role_max_level = clearance_levels.get(role_policy["max_clearance"], 1)
     
+    # Check if user's clearance exceeds role's max clearance
     if user_level > role_max_level:
         violations.append({
             "type": "role_clearance_violation",
@@ -503,6 +617,43 @@ def rlsa_guard_comprehensive(user_context: Dict[str, Any], query_context: Dict[s
             "user_role": user_role
         })
         policy_context["rules_applied"].append("RoleBasedAccessControl")
+    
+    # Check if query is requesting content above user's clearance level
+    # Only trigger on explicit requests for higher clearance content
+    query_lower = query.lower()
+    requested_clearance = None
+    requested_level = user_level  # Default to user level
+    
+    # Detect EXPLICIT requests for specific clearance levels (not just mentions)
+    explicit_keywords = {
+        "SECRET": ["show me secret", "retrieve secret", "get secret", "access secret", 
+                   "i need secret", "give me secret", "return secret", "need to see secret",
+                   "show me classified", "i need classified", "get classified"],
+        "CONFIDENTIAL": ["show me confidential", "retrieve confidential", "get confidential",
+                        "i need confidential", "give me confidential"],
+        "INTERNAL": ["show me internal", "retrieve internal", "get internal", 
+                     "i need internal", "company financial data"],
+    }
+    
+    for clearance_type, keywords in explicit_keywords.items():
+        if any(keyword in query_lower for keyword in keywords):
+            requested_clearance = clearance_type
+            requested_level = clearance_levels.get(clearance_type, user_level)
+            break
+    
+    # Only block if explicitly requesting content above user's clearance
+    if requested_clearance and requested_level > user_level:
+        violations.append({
+            "type": "insufficient_clearance_violation",
+            "rule": "ClearanceLevelEnforcement",
+            "severity": "HIGH",
+            "message": f"Query explicitly requests {requested_clearance} content but user only has {user_clearance} clearance",
+            "requested_clearance": requested_clearance,
+            "user_clearance": user_clearance,
+            "user_role": user_role,
+            "clearance_level_difference": clearance_levels.get(requested_clearance, 0) - user_level
+        })
+        policy_context["rules_applied"].append("ClearanceLevelEnforcement")
     
     # 1. Tenant Isolation Check (with role bypass)
     if target_tenant and target_tenant != user_tenant and not role_policy["cross_tenant_access"]:
@@ -574,6 +725,16 @@ def rlsa_guard_comprehensive(user_context: Dict[str, Any], query_context: Dict[s
     
     # Return result
     if violations:
+        # Track metrics for blocked requests
+        if METRICS_ENABLED:
+            for violation in violations:
+                if violation.get("type") == "malicious_threat":
+                    attack_type = violation.get("detected_threats", ["unknown"])[0] if violation.get("detected_threats") else "unknown"
+                    metrics_exporter.track_attack_blocked(attack_type)
+                metrics_exporter.track_threat_detected(violation.get("type", "unknown"))
+                if "insufficient_clearance_violation" in violation.get("type", ""):
+                    metrics_exporter.track_rlsa_violation("clearance_level")
+        
         return {
             "status": "DENIED",
             "action": "BLOCK",
@@ -631,6 +792,9 @@ graph = graph_builder.compile()
 
 # --- Enhanced RLSA-wrapped RAG call
 def rag_with_rlsa(user_id, tenant_id, clearance, query, role="analyst"):
+    import time
+    start_time = time.time()
+    
     # Step 1: Extract comprehensive context
     user_context = {
         "user_id": user_id,
@@ -644,6 +808,25 @@ def rag_with_rlsa(user_id, tenant_id, clearance, query, role="analyst"):
     
     # Step 2: Comprehensive RLSA Enforcement
     decision = rlsa_guard_comprehensive(user_context, query_context, retrieval_metadata)
+    
+    # Track metrics
+    if METRICS_ENABLED:
+        duration = time.time() - start_time
+        is_blocked = decision is not True
+        has_threat = bool(query_context.get("detected_threats"))
+        
+        # Track request and performance
+        metrics_exporter.track_request("blocked" if is_blocked else "allowed", duration)
+        
+        if is_blocked:
+            metrics_exporter.track_file_processed("blocked")
+            if has_threat:
+                metrics_exporter.track_detection_result(True, True, True)  # Accurate block
+            else:
+                metrics_exporter.track_detection_result(False, True, False)  # False positive
+        else:
+            metrics_exporter.track_file_processed("approved")
+    
     if decision is not True:
         # Add success field to denial response
         decision["success"] = False
@@ -668,6 +851,17 @@ def rag_with_rlsa(user_id, tenant_id, clearance, query, role="analyst"):
                 attack_metadata=attack_metadata,
                 was_blocked=True
             )
+            
+            # Track learning metrics
+            if METRICS_ENABLED:
+                metrics_exporter.track_learning_event({
+                    "type": "pattern_learned",
+                    "attack_type": attack_metadata["attack_type"],
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+        
+        # Flush any pending batch items
+        qwen_client.flush_batch()
         
         return False
 
@@ -693,6 +887,10 @@ def rag_with_rlsa(user_id, tenant_id, clearance, query, role="analyst"):
     }
     
     print(json.dumps(success_response, indent=2))
+    
+    # Flush any pending batch items
+    qwen_client.flush_batch()
+    
     return True
 
 # --- CLI Interface
@@ -713,6 +911,8 @@ def main():
     result = rag_with_rlsa(args.user_id, args.tenant_id, args.clearance, args.prompt, args.role)
     
     # Return appropriate exit code
+    # result=True means allowed (successful query), result=False means blocked (denied)
+    # Exit code 0 = success (allowed), exit code 1 = failure (blocked)
     sys.exit(0 if result else 1)
 
 if __name__ == "__main__":

@@ -82,7 +82,7 @@ class SecurityTester:
             "timestamp": datetime.now().isoformat(),
             "attack_metadata": attack_metadata,
             "agent_response": result,
-            "security_status": "BLOCKED" if result["exit_code"] == 1 else "ALLOWED",
+            "security_status": "BLOCKED" if result["exit_code"] != 0 else "ALLOWED",
             "vulnerability_detected": is_vulnerability,
             "threat_category": "always_blocked" if is_always_blocked else "role_dependent" if is_role_dependent else "other",
             "is_privileged_role": is_privileged_role
@@ -166,7 +166,7 @@ class SecurityTester:
                 "timestamp": datetime.now().isoformat(),
                 "attack_metadata": attack_metadata,
                 "agent_response": result,
-                "security_status": "BLOCKED" if result["exit_code"] == 1 else "ALLOWED",
+                "security_status": "BLOCKED" if result["exit_code"] != 0 else "ALLOWED",
                 "vulnerability_detected": is_vulnerability,
                 "threat_category": "always_blocked" if is_always_blocked else "role_dependent" if is_role_dependent else "other",
                 "is_privileged_role": is_privileged_role

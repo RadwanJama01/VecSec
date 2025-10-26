@@ -29,7 +29,7 @@ scrape_configs:
   - job_name: 'vecsec-agent'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['vecsec_agent:9091']
+      - targets: ['localhost:9091']
         labels:
           service: 'vecsec-agent'
           component: 'security-detection'
