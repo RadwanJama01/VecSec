@@ -1,0 +1,90 @@
+groups:
+  - name: vecsec_alerts
+    interval: 30s
+    rules:
+      # BaseTen API Monitoring
+      - alert: HighAPIErrorRate
+        expr: rate(vecsec_baseten_api_calls_failed_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "BaseTen API error rate is {{ $value | humanizePercentage }}"
+          description: "VecSec is experiencing high API error rates from BaseTen"
+
+      - alert: LowCreditsRemaining
+        expr: vecsec_baseten_credits_remaining < 1000
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "BaseTen credits running low: {{ $value }} remaining"
+          description: "Action required: Add more BaseTen credits"
+
+      # Security Monitoring
+      - alert: HighAttackRate
+        expr: rate(vecsec_attacks_blocked_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusually high attack rate detected"
+          description: "{{ $value }} attacks blocked in the last 5 minutes"
+
+      - alert: SecuritySystemDown
+        expr: up{job="vecsec-agent"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "VecSec agent is down"
+          description: "Security monitoring may be compromised"
+
+      # Performance Monitoring
+      - alert: HighInferenceLatency
+        expr: histogram_quantile(0.95, vecsec_inference_duration_seconds_bucket) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Inference latency high (p95: {{ $value }}s)"
+          description: "Response times are degraded"
+
+      - alert: LowThroughput
+        expr: rate(vecsec_inference_total[5m]) < 1
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "Low inference throughput"
+          description: "System may be idle or experiencing issues"
+
+      # Training Monitoring
+      - alert: NoNewPatterns
+        expr: rate(vecsec_patterns_learned_total[1h]) == 0
+        for: 2h
+        labels:
+          severity: info
+        annotations:
+          summary: "No new threat patterns learned"
+          description: "System may need testing data"
+
+      # Infrastructure Monitoring
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus is down"
+          description: "Metrics collection is not working"
+
+      - alert: GrafanaDown
+        expr: up{job="grafana"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Grafana is down"
+          description: "Dashboard access is unavailable"
+

@@ -22,6 +22,13 @@ except ImportError:
     print("❌ Error: Evil_Agent.py not found. Please ensure it's in the same directory.")
     sys.exit(1)
 
+# Import legitimate agent functions
+try:
+    from Legitimate_Agent import generate_legitimate_operation, generate_legitimate_batch, LEGITIMATE_OPERATIONS
+except ImportError:
+    print("❌ Error: Legitimate_Agent.py not found. Please ensure it's in the same directory.")
+    sys.exit(1)
+
 
 class SecurityTester:
     """Automated security testing tool for Good_Agent.py"""
@@ -180,7 +187,10 @@ class SecurityTester:
         return results
     
     def _run_agent_test(self, query: str, tenant_id: str, clearance: str, role: str = "analyst") -> Dict[str, Any]:
-        """Run Good_Agent.py test and capture results"""
+        """Run Good_Agent.py test and capture results with timing"""
+        
+        import time
+        start_time = time.time()
         
         try:
             cmd = [
@@ -192,29 +202,150 @@ class SecurityTester:
             
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             
+            elapsed_time = time.time() - start_time
+            
             return {
                 "exit_code": result.returncode,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
-                "success": result.returncode == 0
+                "success": result.returncode == 0,
+                "elapsed_time": round(elapsed_time, 3),
+                "elapsed_time_ms": int(elapsed_time * 1000)
             }
             
         except subprocess.TimeoutExpired:
+            elapsed_time = time.time() - start_time
             return {
                 "exit_code": -1,
                 "stdout": "",
                 "stderr": "Test timed out - potential DoS vulnerability",
                 "success": False,
-                "timeout": True
+                "timeout": True,
+                "elapsed_time": round(elapsed_time, 3),
+                "elapsed_time_ms": int(elapsed_time * 1000)
             }
         except Exception as e:
+            elapsed_time = time.time() - start_time
             return {
                 "exit_code": -2,
                 "stdout": "",
                 "stderr": f"Test failed: {str(e)}",
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "elapsed_time": round(elapsed_time, 3),
+                "elapsed_time_ms": int(elapsed_time * 1000)
             }
+    
+    def blind_test(self, num_tests: int = 20, tenant_id: str = "tenantA", 
+                   clearance: str = "INTERNAL", role: str = "analyst") -> List[Dict[str, Any]]:
+        """Blind test with mixed legitimate and malicious inputs"""
+        
+        import random
+        
+        print("🎲 BLIND SECURITY TESTING MODE")
+        print("=" * 60)
+        print(f"🎯 Mixing legitimate and malicious inputs (total: {num_tests})")
+        print(f"📊 Target: {tenant_id} (Clearance: {clearance}, Role: {role})")
+        print("=" * 60)
+        
+        results = []
+        for i in range(num_tests):
+            # Randomly decide: malicious or legitimate (60% malicious, 40% legitimate)
+            is_malicious = random.random() < 0.6
+            
+            if is_malicious:
+                # Generate random attack
+                attack_types = list(ATTACK_TYPES.keys())
+                attack_type = random.choice(attack_types)
+                
+                print(f"\n🔴 TEST {i+1}/{num_tests}: [MALICIOUS - {attack_type.upper()}]")
+                
+                attack = generate_attack("blind_tester", tenant_id, clearance, attack_type, role=role)
+                query = attack["example"]["query"]
+                metadata = attack["metadata"]
+                
+                test_result = {
+                    "test_number": i+1,
+                    "type": "MALICIOUS",
+                    "category": attack_type,
+                    "query": query,
+                    "tenant_id": tenant_id,
+                    "clearance": clearance,
+                    "role": role,
+                    "timestamp": datetime.now().isoformat(),
+                    "source": "Evil_Agent",
+                    "metadata": metadata
+                }
+            else:
+                # Generate legitimate operation
+                operation_types = list(LEGITIMATE_OPERATIONS.keys())
+                operation_type = random.choice(operation_types)
+                
+                print(f"\n🟢 TEST {i+1}/{num_tests}: [LEGITIMATE - {operation_type}]")
+                
+                legit_op = generate_legitimate_operation("blind_tester", tenant_id, role, operation_type)
+                query = legit_op["example"]["query"]
+                metadata = legit_op["metadata"]
+                
+                test_result = {
+                    "test_number": i+1,
+                    "type": "LEGITIMATE",
+                    "category": operation_type,
+                    "query": query,
+                    "tenant_id": tenant_id,
+                    "clearance": clearance,
+                    "role": role,
+                    "timestamp": datetime.now().isoformat(),
+                    "source": "Legitimate_Agent",
+                    "metadata": metadata
+                }
+            
+            print(f"📝 Query: {query}")
+            
+            # Test against Sec_Agent
+            result = self._run_agent_test(query, tenant_id, clearance, role)
+            
+            # Analyze result
+            was_blocked = result["exit_code"] == 1
+            was_allowed = result["exit_code"] == 0
+            
+            test_result["agent_response"] = result
+            test_result["was_blocked"] = was_blocked
+            test_result["was_allowed"] = was_allowed
+            
+            # Display timing
+            elapsed_ms = result.get("elapsed_time_ms", 0)
+            elapsed_sec = result.get("elapsed_time", 0)
+            print(f"   ⏱️  Time: {elapsed_ms}ms ({elapsed_sec}s)")
+            
+            # Check if this is correct behavior
+            if is_malicious:
+                if was_blocked:
+                    print(f"   ✅ CORRECT: Malicious input was blocked")
+                    test_result["correct"] = True
+                else:
+                    print(f"   ❌ VULNERABILITY: Malicious input was allowed!")
+                    test_result["correct"] = False
+                    test_result["vulnerability"] = True
+                    self.vulnerabilities_found.append(test_result)
+            else:
+                if was_allowed:
+                    print(f"   ✅ CORRECT: Legitimate input was allowed")
+                    test_result["correct"] = True
+                else:
+                    print(f"   ❌ FALSE POSITIVE: Legitimate input was blocked!")
+                    test_result["correct"] = False
+                    test_result["false_positive"] = True
+                    self.vulnerabilities_found.append(test_result)
+            
+            results.append(test_result)
+            self.test_results.append(test_result)
+            
+            # Small delay to avoid overwhelming output
+            import time
+            time.sleep(0.1)
+        
+        return results
     
     def generate_report(self) -> Dict[str, Any]:
         """Generate comprehensive security report"""
@@ -226,7 +357,8 @@ class SecurityTester:
         # Group vulnerabilities by attack type
         vuln_by_type = {}
         for vuln in self.vulnerabilities_found:
-            attack_type = vuln["attack_type"]
+            # Handle both malicious attacks and legitimate operations
+            attack_type = vuln.get("attack_type") or vuln.get("category") or vuln.get("type", "unknown")
             if attack_type not in vuln_by_type:
                 vuln_by_type[attack_type] = []
             vuln_by_type[attack_type].append(vuln)
@@ -234,13 +366,26 @@ class SecurityTester:
         # Calculate security score
         security_score = (blocked_attacks / total_tests * 100) if total_tests > 0 else 0
         
+        # Calculate timing statistics
+        total_time = sum(r.get("agent_response", {}).get("elapsed_time", 0) for r in self.test_results)
+        avg_time = total_time / total_tests if total_tests > 0 else 0
+        min_time = min((r.get("agent_response", {}).get("elapsed_time", 999) for r in self.test_results), default=0)
+        max_time = max((r.get("agent_response", {}).get("elapsed_time", 0) for r in self.test_results), default=0)
+        
         report = {
             "summary": {
                 "total_tests": total_tests,
                 "vulnerabilities_found": vulnerabilities,
                 "attacks_blocked": blocked_attacks,
                 "security_score": round(security_score, 2),
-                "test_timestamp": datetime.now().isoformat()
+                "test_timestamp": datetime.now().isoformat(),
+                "timing_stats": {
+                    "total_time_sec": round(total_time, 3),
+                    "avg_time_sec": round(avg_time, 3),
+                    "min_time_sec": round(min_time, 3),
+                    "max_time_sec": round(max_time, 3),
+                    "avg_time_ms": round(avg_time * 1000, 1)
+                }
             },
             "vulnerabilities_by_type": vuln_by_type,
             "detailed_results": self.test_results,
@@ -293,14 +438,32 @@ class SecurityTester:
         print(f"✅ Attacks Blocked: {summary['attacks_blocked']}")
         print(f"🎯 Security Score: {summary['security_score']}%")
         
-        # Show all malicious inputs used
-        print(f"\n🧨 ALL MALICIOUS INPUTS TESTED:")
+        # Display timing stats
+        if "timing_stats" in summary:
+            timing = summary["timing_stats"]
+            print(f"\n⏱️  TIMING STATISTICS:")
+            print(f"   Average: {timing['avg_time_ms']}ms ({timing['avg_time_sec']}s)")
+            print(f"   Min: {round(timing['min_time_sec'] * 1000, 1)}ms ({timing['min_time_sec']}s)")
+            print(f"   Max: {round(timing['max_time_sec'] * 1000, 1)}ms ({timing['max_time_sec']}s)")
+            print(f"   Total: {round(timing['total_time_sec'], 2)}s")
+        
+        # Show all inputs tested (handle both blind and regular tests)
+        print(f"\n📋 ALL INPUTS TESTED:")
         for i, result in enumerate(self.test_results, 1):
-            metadata = result.get('attack_metadata', {})
+            # Handle both blind test format and regular test format
+            test_type = result.get('type', 'MALICIOUS')
+            category = result.get('category', 'unknown')
+            metadata = result.get('attack_metadata') or result.get('metadata', {})
             severity = metadata.get('config', {}).get('severity', 'UNKNOWN')
-            attack_id = metadata.get('attack_id', 'N/A')[:8]
-            status = "✅ BLOCKED" if result['security_status'] == 'BLOCKED' else "⚠️  ALLOWED"
-            print(f"   {i}. [{severity}] {status} - {result['query']} (ID: {attack_id})")
+            test_id = metadata.get('attack_id') or metadata.get('operation_id') or 'N/A'
+            was_correct = result.get('correct', True)
+            
+            if test_type == "LEGITIMATE":
+                status = "✅ ALLOWED" if was_correct else "❌ FALSE POSITIVE"
+                print(f"   {i}. 🟢 LEGITIMATE [{severity}] {status} - {result['query'][:60]}...")
+            else:
+                status = "✅ BLOCKED" if result.get('was_blocked') else "⚠️  ALLOWED"
+                print(f"   {i}. 🔴 MALICIOUS [{severity}] {status} - {result['query'][:60]}...")
         
         if report["vulnerabilities_by_type"]:
             print(f"\n🚨 VULNERABILITIES BY ATTACK TYPE:")
@@ -398,8 +561,10 @@ def main():
         description="Automated Security Testing Tool for Good_Agent.py"
     )
     parser.add_argument("--test-type", default="all", 
-                       choices=["all", "single", "batch"],
+                       choices=["all", "single", "batch", "blind"],
                        help="Type of test to run")
+    parser.add_argument("--blind-tests", type=int, default=20,
+                       help="Number of tests for blind mode (default: 20)")
     parser.add_argument("--attack-type", default=None,
                        help="Specific attack type to test (for single test)")
     parser.add_argument("--attack-types", default="prompt_injection,data_exfiltration,social_engineering",
@@ -438,6 +603,8 @@ def main():
     elif args.test_type == "batch":
         attack_types = [t.strip() for t in args.attack_types.split(",")]
         results = tester.test_batch_attacks(attack_types, args.batch_size, args.tenant_id, args.clearance, args.role)
+    elif args.test_type == "blind":
+        results = tester.blind_test(args.blind_tests, args.tenant_id, args.clearance, args.role)
     
     # Show detailed metadata if requested
     if args.show_metadata:
