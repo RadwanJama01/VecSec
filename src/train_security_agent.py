@@ -77,7 +77,7 @@ class SecurityAgentTrainer:
         
         for test_name, args in test_types:
             try:
-                cmd = [sys.executable, "Good_Vs_Evil.py"] + args
+                cmd = [sys.executable, "src/Good_Vs_Evil.py"] + args
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
                 results.append({
                     "test_type": test_name,
@@ -142,10 +142,10 @@ class SecurityAgentTrainer:
     
     def _save_progress(self):
         """Save training progress"""
-        with open(f"training_iteration_{self.iteration}.json", 'w') as f:
+        with open(f"data/training/training_iteration_{self.iteration}.json", 'w') as f:
             json.dump(self.metrics, f, indent=2)
         
-        print(f"   💾 Progress saved to training_iteration_{self.iteration}.json")
+        print(f"   💾 Progress saved to data/training/training_iteration_{self.iteration}.json")
     
     def print_training_summary(self):
         """Print training summary"""

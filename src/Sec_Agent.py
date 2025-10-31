@@ -61,12 +61,21 @@ load_dotenv()
 
 # Initialize metrics exporter
 try:
-    from metrics_exporter import metrics_exporter, start_metrics_exporter
+    from src.metrics_exporter import metrics_exporter, start_metrics_exporter
     metrics_exporter.start_server()
     METRICS_ENABLED = True
 except ImportError:
-    print("⚠️  metrics_exporter not available")
-    METRICS_ENABLED = False
+    # Fallback to same directory import
+    try:
+        from metrics_exporter import metrics_exporter, start_metrics_exporter
+        metrics_exporter.start_server()
+        METRICS_ENABLED = True
+    except ImportError:
+        print("⚠️  metrics_exporter not available")
+        METRICS_ENABLED = False
+    except Exception as e:
+        print(f"⚠️  Could not start metrics exporter: {e}")
+        METRICS_ENABLED = False
 except Exception as e:
     print(f"⚠️  Could not start metrics exporter: {e}")
     METRICS_ENABLED = False

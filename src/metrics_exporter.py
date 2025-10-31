@@ -102,7 +102,7 @@ active_sandboxes = Gauge('vecsec_active_sandboxes',
 class MetricsExporter:
     """Export metrics for VecSec monitoring"""
     
-    def __init__(self, port: int = 9091, persist_file: str = "vecsec_metrics.json"):
+    def __init__(self, port: int = 9091, persist_file: str = "data/training/vecsec_metrics.json"):
         self.port = port
         self.persist_file = persist_file
         self.server_started = False

@@ -72,7 +72,7 @@ def run_security_check(query, role, clearance):
     """Run a security check and return the result"""
     try:
         cmd = [
-            sys.executable, "Sec_Agent.py", query,
+            sys.executable, "src/Sec_Agent.py", query,
             "--role", role,
             "--clearance", clearance
         ]

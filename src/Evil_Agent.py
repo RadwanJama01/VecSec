@@ -4,6 +4,58 @@ Malicious Prompt Generator (Adversarial Attack Agent)
 Generates adversarial prompts (e.g., prompt injection, jailbreak, social engineering)
 for ethical security testing of LLM pipelines and RLS-enforced systems.
 
+KNOWN ISSUES & LIMITATIONS:
+============================
+
+1. **Manual, Static Privilege Escalation (generate_privilege_escalation_attack)**
+   - Location: Lines 198-205
+   - Problem: Hardcoded escalation_scenarios list with only 6 manual combinations
+   - Issue: Not algorithmic - doesn't generate all possible role/clearance/tenant combinations
+   - Missing: Should algorithmically generate ALL violations:
+     * All role combinations (guest→analyst, analyst→superuser, etc.)
+     * All clearance escalations (PUBLIC→INTERNAL, INTERNAL→CONFIDENTIAL, etc.)
+     * All cross-tenant combinations (tenantA→tenantB, tenantB→tenantA, etc.)
+   - Impact: Only tests 6 scenarios, missing many potential attack vectors
+   - Fix Needed: Algorithmic generation of all possible privilege escalation combinations
+
+2. **Multiple LLM Providers But Only One Used**
+   - Location: LLMClient class (lines 26-125)
+   - Problem: Supports Google, OpenAI, Flash - but only one can be used at a time
+   - Issue: Why have multiple providers if not using both? Not clear if there's a reason
+   - Options:
+     * Could use for fallback (if one fails, try another)
+     * Could use for diversity (generate attacks from multiple models)
+     * Could be redundant if not needed
+   - Fix Needed: Document why multiple providers OR remove unused ones
+
+3. **Static Attack Templates Even With LLM**
+   - Location: ATTACK_TYPES dict (lines 132-177) and generate_llm_attack (lines 306-344)
+   - Problem: Even when use_llm=True, still uses static base_prompts templates
+   - Issue: LLM generation is template-based, not truly dynamic
+   - Static Elements:
+     * Base attack strings hardcoded in ATTACK_TYPES dict
+     * LLM prompts use static templates (lines 309-315)
+     * Limited variation even with LLM generation
+   - Impact: Attack patterns are predictable and static
+   - Fix Needed: More dynamic generation, learn from past successful attacks
+
+NEXT STEPS:
+-----------
+1. Create algorithmic privilege escalation generator:
+   - Generate ALL role/clearance combinations programmatically
+   - Test all clearance level violations (PUBLIC < INTERNAL < CONFIDENTIAL < SECRET)
+   - Test all cross-tenant combinations automatically
+   
+2. Clarify LLM provider usage:
+   - Implement fallback mechanism OR
+   - Use multiple providers for attack diversity OR
+   - Remove unused providers
+   
+3. Make attack generation more dynamic:
+   - Learn from successful attack patterns
+   - Use LLM to generate truly novel attacks, not template-based
+   - Evolve attacks based on what bypasses security
+
 Author: VecSec Labs
 License: For authorized security testing and research only.
 """

@@ -17,17 +17,25 @@ import argparse
 
 # Import the attack generation functions
 try:
-    from Evil_Agent import generate_attack, generate_batch, ATTACK_TYPES
+    from src.Evil_Agent import generate_attack, generate_batch, ATTACK_TYPES
 except ImportError:
-    print("❌ Error: Evil_Agent.py not found. Please ensure it's in the same directory.")
-    sys.exit(1)
+    # Fallback to same directory import
+    try:
+        from Evil_Agent import generate_attack, generate_batch, ATTACK_TYPES
+    except ImportError:
+        print("❌ Error: Evil_Agent.py not found. Please ensure it's in src/ or same directory.")
+        sys.exit(1)
 
 # Import legitimate agent functions
 try:
-    from Legitimate_Agent import generate_legitimate_operation, generate_legitimate_batch, LEGITIMATE_OPERATIONS
+    from src.Legitimate_Agent import generate_legitimate_operation, generate_legitimate_batch, LEGITIMATE_OPERATIONS
 except ImportError:
-    print("❌ Error: Legitimate_Agent.py not found. Please ensure it's in the same directory.")
-    sys.exit(1)
+    # Fallback to same directory import
+    try:
+        from Legitimate_Agent import generate_legitimate_operation, generate_legitimate_batch, LEGITIMATE_OPERATIONS
+    except ImportError:
+        print("❌ Error: Legitimate_Agent.py not found. Please ensure it's in src/ or same directory.")
+        sys.exit(1)
 
 
 class SecurityTester:
@@ -194,7 +202,7 @@ class SecurityTester:
         
         try:
             cmd = [
-                sys.executable, "Sec_Agent.py", query,
+                sys.executable, "src/Sec_Agent.py", query,
                 "--tenant-id", tenant_id,
                 "--clearance", clearance,
                 "--role", role
@@ -522,7 +530,10 @@ class SecurityTester:
         
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"malicious_inputs_{timestamp}.json"
+            filename = f"data/attacks/malicious_inputs_{timestamp}.json"
+        elif not filename.startswith("data/attacks/") and not filename.startswith("/"):
+            # If relative path doesn't include data/attacks/, add it
+            filename = f"data/attacks/{filename}"
         
         malicious_data = {
             "export_info": {
