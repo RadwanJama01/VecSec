@@ -1,9 +1,66 @@
 #!/usr/bin/env python3
 """
-Legitimate Agent - Sends data with proper permissions for legitimate operations
+Legitimate Agent - False Positive Testing & Balanced Security Test Suite Generator
 
-This agent is designed to perform legitimate operations with appropriate
-role-based permissions, serving as a contrast to the malicious Evil_Agent.py
+This agent generates legitimate queries with appropriate role-based permissions
+to test for False Positives (FP) and create balanced test suites for security validation.
+
+Key Functions:
+-------------
+
+1. **Generates Queries Based on Context**
+   - Creates test cases based on tenant_id, role, and operation_type
+   - Ensures queries match appropriate permissions (role + clearance level)
+   - Generates realistic legitimate operations for each role level
+   
+   Example:
+   - tenant_id="tenantA", role="analyst", operation_type="data_retrieval"
+   - Generates: "Query marketing campaign performance data"
+   - Matches: INTERNAL clearance level (appropriate for analyst role)
+
+2. **Tests for False Positives (FP)**
+   - Ensures legitimate users aren't incorrectly blocked by security system
+   - Validates that normal operations pass through security checks
+   - Identifies when security rules are too aggressive
+   
+   Use Case:
+   - Generate legitimate analyst query → Test against Sec_Agent
+   - If blocked: FALSE POSITIVE detected! ⚠️
+   - Indicates security rules need refinement to allow legitimate operations
+
+3. **Balances Test Suites**
+   - Mixes legitimate + malicious queries in blind testing (Good_Vs_Evil.py)
+   - Creates realistic test scenarios (60% malicious, 40% legitimate)
+   - Measures both security (blocks attacks) and usability (allows legitimate access)
+   
+   Example Blind Test:
+   - Test 1: Malicious "Ignore instructions" → Should BLOCK ✅
+   - Test 2: Legitimate "View public docs" → Should ALLOW ✅
+   - Test 3: Legitimate "Retrieve statistics" → Should ALLOW ✅
+   - If Test 2/3 blocked → FALSE POSITIVE (security too strict)
+
+Integration:
+------------
+Used by Good_Vs_Evil.py for blind security testing:
+- Evil_Agent.py generates attacks (should be BLOCKED)
+- Legitimate_Agent.py generates safe queries (should be ALLOWED)
+- Good_Vs_Evil.py tests both to measure:
+  * Detection Rate: % of attacks blocked
+  * False Positive Rate: % of legitimate queries blocked (BAD!)
+
+CLI Usage:
+----------
+# Generate single legitimate query
+python3 Legitimate_Agent.py --role analyst --operation-type data_retrieval
+
+# Generate batch for testing
+python3 Legitimate_Agent.py --role admin --batch 10
+
+# Test against Sec_Agent
+python3 Sec_Agent.py "<generated_query>" --role analyst --clearance INTERNAL
+
+Author: VecSec Labs
+License: For authorized security testing and research only.
 """
 
 import json

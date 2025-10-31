@@ -1,3 +1,40 @@
+"""
+VecSec Security Agent - RLS-Enforced RAG System with Threat Detection
+
+KNOWN ISSUES IN EMBEDDING LOGIC (QwenEmbeddingClient.get_embedding):
+=====================================================================
+
+1. Random Embeddings After Training (Line ~70-74)
+   - Returns random.rand(768) when patterns_learned >= 100
+   - Problem: Random vectors provide no semantic value for similarity checks
+   - Fix: Raise exception or skip semantic detection entirely
+
+2. Random Embeddings as Fallback (Line ~76-80)
+   - Returns random.rand(768) when BaseTen API not enabled
+   - Problem: Security checks based on random vectors don't work
+   - Fix: Raise ValueError with clear error message
+
+3. Random Embeddings While Batch Filling (Line ~94-95)
+   - Returns random.rand(768) while waiting for batch to fill
+   - Problem: Early requests use random embeddings instead of real ones
+   - Fix: Flush batch immediately or wait for real embeddings
+
+Note: Hashing is CORRECT - cache stores 768-dim vectors, not text. Embeddings needed for np.dot() similarity.
+
+NEXT STEPS:
+-----------
+1. Create unit tests for QwenEmbeddingClient.get_embedding()
+   - Test: Returns real embeddings from API when enabled
+   - Test: Raises ValueError when API not enabled (no random fallback)
+   - Test: Raises ValueError when training complete (no random fallback)
+   - Test: Flushes batch immediately when not full (no random return)
+   - Test: Cache hit returns cached embedding correctly
+   - Test: Batch processing handles errors gracefully
+
+2. Fix embedding logic to remove all random.rand() returns
+3. Add integration tests for semantic threat detection with real embeddings
+"""
+
 from datetime import datetime
 import uuid, json, re, os
 from typing import List, TypedDict, Literal, Dict, Any
