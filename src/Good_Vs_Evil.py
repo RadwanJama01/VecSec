@@ -17,14 +17,18 @@ import argparse
 
 # Import the attack generation functions
 try:
-    from src.Evil_Agent import generate_attack, generate_batch, ATTACK_TYPES
+    from src.evil_agent import generate_attack, generate_batch, ATTACK_TYPES
 except ImportError:
-    # Fallback to same directory import
+    # Fallback to backward-compatible import
     try:
-        from Evil_Agent import generate_attack, generate_batch, ATTACK_TYPES
+        from src.Evil_Agent import generate_attack, generate_batch, ATTACK_TYPES
     except ImportError:
-        print("❌ Error: Evil_Agent.py not found. Please ensure it's in src/ or same directory.")
-        sys.exit(1)
+        # Fallback to same directory import
+        try:
+            from Evil_Agent import generate_attack, generate_batch, ATTACK_TYPES
+        except ImportError:
+            print("❌ Error: Evil_Agent module not found. Please ensure it's in src/ or same directory.")
+            sys.exit(1)
 
 # Import legitimate agent functions
 try:
