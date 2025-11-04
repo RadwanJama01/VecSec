@@ -1,148 +1,155 @@
 """
-BaseTen Qwen3 Embedding Client with batching and caching
+SentenceTransformers Local Embedding Client
+🔥 Local, free, offline embeddings using SentenceTransformers
 
-KNOWN ISSUES IN get_embedding:
-==============================
-1. Random Embeddings After Training (Line ~116-120)
-   - Returns random.rand(768) when patterns_learned >= 100
-   - Problem: Random vectors provide no semantic value for similarity checks
-   - Fix: Raise exception or skip semantic detection entirely
-
-2. Random Embeddings as Fallback (Line ~122-126)
-   - Returns random.rand(768) when BaseTen API not enabled
-   - Problem: Security checks based on random vectors don't work
-   - Fix: Raise ValueError with clear error message
-
-3. Random Embeddings While Batch Filling (Line ~140-141)
-   - Returns random.rand(768) while waiting for batch to fill
-   - Problem: Early requests use random embeddings instead of real ones
-   - Fix: Flush batch immediately or wait for real embeddings
-
-Note: Hashing is CORRECT - cache stores 768-dim vectors, not text. Embeddings needed for np.dot() similarity.
+No API needed! Uses pre-trained models that run locally.
 """
 
 import os
-import requests
 import numpy as np
+from typing import Optional
+
+# Try to import SentenceTransformers
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+    SentenceTransformer = None
 
 
-class QwenEmbeddingClient:
-    """BaseTen Qwen3 embedding client with batching"""
+class EmbeddingClient:
+    """
+    Local embedding client using SentenceTransformers
     
-    def __init__(self, model_id: str = None, api_key: str = None, batch_size: int = 100):
-        self.model_id = model_id or os.getenv("BASETEN_MODEL_ID")
-        self.api_key = api_key or os.getenv("BASETEN_API_KEY")
+    Uses pre-trained models (like 'all-MiniLM-L6-v2') that run locally.
+    No API keys, no API calls, fully offline!
+    """
+    
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", batch_size: int = 32):
+        """
+        Initialize local embedding client
+        
+        Args:
+            model_name: SentenceTransformer model name (default: all-MiniLM-L6-v2)
+            batch_size: Batch size for encoding (default: 32)
+        """
+        self.model_name = model_name
         self.batch_size = batch_size
         self.embedding_cache = {}  # Cache for embeddings
-        self.pending_batch = []  # Queue for batching
         self.total_calls = 0
-        self.min_patterns_for_training = 100  # Stop calling API after this many patterns learned
+        self.enabled = False
         
-        if not self.model_id or not self.api_key:
-            print("⚠️  BaseTen API credentials not set. Embedding-based detection disabled.")
+        if not SENTENCE_TRANSFORMERS_AVAILABLE:
+            print("⚠️  sentence-transformers not installed. Install with: pip install sentence-transformers")
+            print("⚠️  Embedding-based detection disabled.")
+            self.model = None
             self.enabled = False
         else:
-            self.base_url = f"https://api.baseten.co/v1/models/{self.model_id}/predict"
-            self.headers = {
-                "Authorization": f"Api-Key {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            self.enabled = True
-            print(f"✅ BaseTen client initialized with batch size: {self.batch_size}")
+            try:
+                print(f"📦 Loading SentenceTransformer model: {model_name}")
+                self.model = SentenceTransformer(model_name)
+                self.enabled = True
+                print(f"✅ Local embedding client initialized (runs offline, no API needed!)")
+            except Exception as e:
+                print(f"⚠️  Failed to load model {model_name}: {e}")
+                self.model = None
+                self.enabled = False
     
-    def get_embedding(self, text: str) -> np.ndarray:
-        """Get embedding from BaseTen with batching and caching"""
+    def get_embedding(self, text: str, normalize: bool = True) -> np.ndarray:
+        """
+        Get embedding for text using local SentenceTransformer model
+        
+        Args:
+            text: Text to embed
+            normalize: Normalize embeddings (for cosine similarity)
+            
+        Returns:
+            numpy array of embedding vector (384-dim for all-MiniLM-L6-v2)
+        """
+        if not self.enabled or self.model is None:
+            raise ValueError(
+                "Embedding client not enabled. Install sentence-transformers: "
+                "pip install sentence-transformers"
+            )
+        
         # Check cache first
         cache_key = hash(text)
         if cache_key in self.embedding_cache:
             return self.embedding_cache[cache_key]
         
-        # If we've learned enough patterns, skip API calls
-        if hasattr(self, 'patterns_learned') and self.patterns_learned >= self.min_patterns_for_training:
-            # Return random embedding (we won't use semantic detection anymore)
-            embedding = np.random.rand(768)
-            self.embedding_cache[cache_key] = embedding
-            return embedding
+        # Generate embedding using SentenceTransformer
+        embedding = self.model.encode(text, normalize_embeddings=normalize, show_progress_bar=False)
         
-        if not self.enabled:
-            # Return random embedding as fallback
-            embedding = np.random.rand(768)
-            self.embedding_cache[cache_key] = embedding
-            return embedding
+        # Cache it
+        self.embedding_cache[cache_key] = embedding
+        self.total_calls += 1
         
-        # Add to pending batch
-        self.pending_batch.append(text)
-        
-        # Process batch if we've accumulated enough
-        if len(self.pending_batch) >= self.batch_size:
-            embeddings = self._process_batch()
-            # Update cache for all items in batch
-            for i, text_item in enumerate(self.pending_batch):
-                self.embedding_cache[hash(text_item)] = embeddings[i]
-            # Return the embedding for current request
-            return embeddings[len(self.pending_batch) - 1]
-        
-        # For now, return random (will be updated when batch processes)
-        return np.random.rand(768)
+        return embedding
     
-    def _process_batch(self) -> list:
-        """Process pending batch of texts and get embeddings"""
-        if not self.pending_batch:
-            return []
+    def get_embeddings_batch(self, texts: list, normalize: bool = True) -> list:
+        """
+        Get embeddings for multiple texts in one batch
         
-        texts = self.pending_batch[:]
-        self.pending_batch = []  # Clear batch
-        
-        try:
-            # Batch API call
-            payload = {
-                "inputs": texts,  # Send multiple texts at once
-                "parameters": {
-                    "task": "embedding",
-                    "max_length": 512
-                }
-            }
+        Args:
+            texts: List of texts to embed
+            normalize: Normalize embeddings (for cosine similarity)
             
-            response = requests.post(
-                self.base_url,
-                json=payload,
-                headers=self.headers,
-                timeout=10  # Longer timeout for batch
+        Returns:
+            List of numpy arrays (embeddings)
+        """
+        if not self.enabled or self.model is None:
+            raise ValueError(
+                "Embedding client not enabled. Install sentence-transformers: "
+                "pip install sentence-transformers"
             )
+        
+        # Generate embeddings in batch (much faster!)
+        # SentenceTransformer.encode() returns a numpy array (n, embedding_dim)
+        embeddings_array = self.model.encode(
+            texts,
+            batch_size=self.batch_size,
+            normalize_embeddings=normalize,
+            show_progress_bar=False
+        )
+        
+        # Convert to list of numpy arrays and cache
+        embeddings_list = []
+        for i, text in enumerate(texts):
+            embedding = embeddings_array[i]  # Extract single embedding
+            embeddings_list.append(embedding)
             
-            self.total_calls += 1
-            print(f"📦 Batch API call #{self.total_calls} processed {len(texts)} embeddings")
-            
-            if response.status_code == 200:
-                result = response.json()
-                embeddings = [np.array(emb) for emb in result["outputs"]]
-                return embeddings
-            else:
-                print(f"⚠️  BaseTen API error: {response.status_code}")
-                return [np.random.rand(768) for _ in texts]
-        except Exception as e:
-            print(f"⚠️  BaseTen batch failed: {e}")
-            return [np.random.rand(768) for _ in texts]
+            # Cache it
+            cache_key = hash(text)
+            self.embedding_cache[cache_key] = embedding
+        
+        self.total_calls += 1
+        
+        return embeddings_list
     
     def flush_batch(self):
-        """Force process any pending batch items"""
-        if self.pending_batch:
-            embeddings = self._process_batch()
-            for i, text_item in enumerate(self.pending_batch):
-                self.embedding_cache[hash(text_item)] = embeddings[i]
+        """
+        Flush batch (no-op for SentenceTransformers - batching is handled automatically)
+        Kept for API compatibility
+        """
+        pass
     
     def set_patterns_learned(self, count: int):
-        """Update number of patterns learned"""
+        """
+        Update number of patterns learned (kept for API compatibility)
+        No-op for local embeddings - always available!
+        """
+        if not hasattr(self, 'patterns_learned'):
+            self.patterns_learned = 0
         self.patterns_learned = count
-        if count >= self.min_patterns_for_training:
-            print(f"🎓 Training complete! Learned {count} patterns. Disabling BaseTen API calls.")
     
     def get_stats(self):
         """Get embedding statistics"""
         return {
             "total_calls": self.total_calls,
             "cache_size": len(self.embedding_cache),
-            "pending_batch_size": len(self.pending_batch),
-            "patterns_learned": getattr(self, 'patterns_learned', 0)
+            "pending_batch_size": 0,  # No pending batch for SentenceTransformers
+            "patterns_learned": getattr(self, 'patterns_learned', 0),
+            "model_name": self.model_name,
+            "enabled": self.enabled
         }
-
