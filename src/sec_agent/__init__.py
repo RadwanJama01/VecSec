@@ -4,10 +4,17 @@ VecSec Security Agent Package
 Modular security agent with RLS enforcement and threat detection.
 """
 
-from .embeddings_client import QwenEmbeddingClient
+from .embeddings_client import EmbeddingClient
 from .threat_detector import ContextualThreatEmbedding
 from .mock_llm import MockLLM, MockEmbeddings
-from .policy_manager import TENANT_POLICIES, ROLE_POLICIES, get_tenant_policy, get_role_policy
+from .policy_manager import (
+    TENANT_POLICIES, ROLE_POLICIES, 
+    get_tenant_policy, get_role_policy,
+    validate_tenant_policy, validate_role_policy,
+    can_access_clearance, can_access_topic,
+    can_access_tenant, can_bypass_restriction,
+    has_operation_permission, compare_clearance_levels
+)
 from .query_parser import extract_query_context
 from .metadata_generator import generate_retrieval_metadata
 from .rls_enforcer import rlsa_guard_comprehensive
@@ -23,7 +30,7 @@ from .config import (
 
 __all__ = [
     # Classes
-    'QwenEmbeddingClient',
+    'EmbeddingClient',
     'ContextualThreatEmbedding',
     'MockLLM',
     'MockEmbeddings',
@@ -36,6 +43,14 @@ __all__ = [
     'rlsa_guard_comprehensive',
     'get_tenant_policy',
     'get_role_policy',
+    'validate_tenant_policy',
+    'validate_role_policy',
+    'can_access_clearance',
+    'can_access_topic',
+    'can_access_tenant',
+    'can_bypass_restriction',
+    'has_operation_permission',
+    'compare_clearance_levels',
     'main',
     'initialize_vector_store',
     'initialize_sample_documents',

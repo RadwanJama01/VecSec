@@ -5,13 +5,13 @@ Contextual Threat Embedding - Threat pattern learning and detection
 from datetime import datetime
 from typing import Dict
 import numpy as np
-from .embeddings_client import QwenEmbeddingClient
+from .embeddings_client import EmbeddingClient
 
 
 class ContextualThreatEmbedding:
     """Maintains context while creating embeddings for threats"""
     
-    def __init__(self, qwen_client: QwenEmbeddingClient):
+    def __init__(self, qwen_client: EmbeddingClient):
         self.qwen = qwen_client
         self.learned_patterns = []
         self.max_patterns = 200  # Limit stored patterns

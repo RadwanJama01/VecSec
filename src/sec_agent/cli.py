@@ -5,7 +5,7 @@ CLI Interface for VecSec Security Agent
 import sys
 import argparse
 from .rag_orchestrator import RAGOrchestrator
-from .embeddings_client import QwenEmbeddingClient
+from .embeddings_client import EmbeddingClient
 from .threat_detector import ContextualThreatEmbedding
 from .mock_llm import MockLLM, MockEmbeddings
 from .config import (
@@ -34,7 +34,7 @@ def main():
     prompt_template = create_rag_prompt_template()
     
     # Initialize embedding and threat detection
-    qwen_client = QwenEmbeddingClient()
+    qwen_client = EmbeddingClient()
     threat_embedder = ContextualThreatEmbedding(qwen_client)
     
     # Create orchestrator
