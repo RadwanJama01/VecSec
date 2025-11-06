@@ -71,6 +71,7 @@ License: For authorized security testing and research only.
 """
 
 import os
+import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
@@ -283,6 +284,87 @@ METRICS_ENABLED = _initialize_metrics()
 
 
 # ============================================================================
+# Logging Configuration
+# ============================================================================
+
+def setup_logging(
+    log_file: Optional[str] = None,
+    log_level: str = "INFO",
+    log_to_console: bool = True
+) -> None:
+    """
+    Configure logging for the VecSec application.
+    
+    Args:
+        log_file: Path to log file (default: None, logs to console only)
+        log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        log_to_console: Whether to also log to console (default: True)
+    
+    Example:
+        setup_logging(log_file="vecsec.log", log_level="DEBUG")
+    """
+    # Convert string level to logging constant
+    level_map = {
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR,
+        "CRITICAL": logging.CRITICAL
+    }
+    level = level_map.get(log_level.upper(), logging.INFO)
+    
+    # Create formatter
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # Create handlers
+    handlers = []
+    
+    if log_to_console:
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(level)
+        console_handler.setFormatter(formatter)
+        handlers.append(console_handler)
+    
+    if log_file:
+        # Ensure log directory exists
+        log_path = Path(log_file)
+        if log_path.parent and not log_path.parent.exists():
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(level)
+        file_handler.setFormatter(formatter)
+        handlers.append(file_handler)
+    
+    # Configure root logger
+    logging.basicConfig(
+        level=level,
+        handlers=handlers,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
+
+# Auto-configure logging if LOG_FILE or LOG_TO_CONSOLE env vars are set
+# Only auto-configure if logging hasn't been set up yet
+if not logging.getLogger().handlers:
+    _log_file = os.getenv("LOG_FILE")
+    _log_level = os.getenv("LOG_LEVEL", "INFO")
+    _log_to_console = _parse_bool(os.getenv("LOG_TO_CONSOLE", "true"))
+    
+    # If LOG_FILE is set OR LOG_TO_CONSOLE is true, configure logging
+    if _log_file or _log_to_console:
+        setup_logging(
+            log_file=_log_file,
+            log_level=_log_level,
+            log_to_console=_log_to_console
+        )
+
+
+# ============================================================================
 # Vector Store Initialization
 # ============================================================================
 
@@ -445,3 +527,66 @@ Answer:
 # except ValueError as e:
 #     print(f"⚠️  Configuration validation warning: {e}")
 #     print("⚠️  Continuing with defaults - fix config for production!")
+
+# ============================================================================
+# Sample Documents with Metadata
+# ============================================================================
+
+def initialize_sample_documents_with_metadata(vector_store) -> None:
+    """
+    Add sample documents with proper metadata for tenant isolation
+    
+    Note: ChromaDB only accepts scalar metadata values (str, int, float, bool).
+    Lists are converted to comma-separated strings for storage.
+    """
+    documents = [
+        {
+            "content": "RAG (Retrieval-Augmented Generation) combines retrieval with generation.",
+            "metadata": {
+                "embedding_id": "emb-rag-001",
+                "document_id": "doc-rag-001",
+                "tenant_id": "default_tenant",
+                "sensitivity": "INTERNAL",
+                "topics": ["rag", "ai", "retrieval"]  # Will be converted to string
+            }
+        },
+        {
+            "content": "Vector stores enable semantic similarity search using embeddings.",
+            "metadata": {
+                "embedding_id": "emb-vec-001",
+                "document_id": "doc-vec-001",
+                "tenant_id": "default_tenant",
+                "sensitivity": "PUBLIC",
+                "topics": ["vectors", "embeddings", "search"]  # Will be converted to string
+            }
+        },
+        # Add more documents with different tenants for testing
+        {
+            "content": "Classified information about security protocols.",
+            "metadata": {
+                "embedding_id": "emb-sec-001",
+                "document_id": "doc-sec-001",
+                "tenant_id": "security_tenant",
+                "sensitivity": "CLASSIFIED",
+                "topics": ["security", "classified"]  # Will be converted to string
+            }
+        }
+    ]
+    
+    # Convert metadata to ChromaDB-compatible format (lists -> comma-separated strings)
+    chromadb_metadatas = []
+    for doc in documents:
+        metadata = doc["metadata"].copy()
+        # Convert list values to comma-separated strings for ChromaDB
+        for key, value in metadata.items():
+            if isinstance(value, list):
+                metadata[key] = ",".join(str(v) for v in value)  # Convert list to comma-separated string
+            elif not isinstance(value, (str, int, float, bool)):
+                metadata[key] = str(value)  # Convert other non-scalar types to string
+        chromadb_metadatas.append(metadata)
+    
+    # Add to ChromaDB
+    vector_store.add_texts(
+        texts=[doc["content"] for doc in documents],
+        metadatas=chromadb_metadatas
+    )
