@@ -72,13 +72,34 @@ def generate_retrieval_metadata_real(
 
     # Search vector store for relevant documents
     try:
+        # Check if vector_store is None or invalid
+        if vector_store is None:
+            raise AttributeError("Vector store is None")
+        
         # Perform vector search with filtering
         filter_dict = {"tenant_id": user_tenant} if user_tenant else None
-        results = vector_store.similarity_search_with_score(
-            query_text, 
-            k=5,
-            filter=filter_dict,
-        )
+        
+        # Try with filter first (works for ChromaDB)
+        try:
+            results = vector_store.similarity_search_with_score(
+                query_text, 
+                k=5,
+                filter=filter_dict,
+            )
+        except (TypeError, AttributeError) as filter_error:
+            # InMemoryVectorStore doesn't support filter dict - search without filter and filter manually
+            # But only if vector_store is actually valid
+            if vector_store is None:
+                raise  # Re-raise the original error
+            all_results = vector_store.similarity_search_with_score(query_text, k=10)
+            if filter_dict and "tenant_id" in filter_dict:
+                # Manually filter results by tenant_id
+                results = [
+                    (doc, score) for doc, score in all_results 
+                    if doc.metadata.get("tenant_id") == filter_dict["tenant_id"]
+                ][:5]
+            else:
+                results = all_results[:5]
         
         logger.info(
             f"Vector search completed: found {len(results)} results",
