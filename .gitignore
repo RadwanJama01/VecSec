@@ -1,1 +1,14 @@
 .env
+venv/
+.venv/
+ARCHITECTURE_VISUALIZATION_PROMPT.md
+ARCHITECTURE_EXPLANATION.md
+
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Chroma local data
+chroma_db/
+chroma_db/chroma_db.sqlite3
