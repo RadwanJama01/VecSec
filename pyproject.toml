@@ -1,0 +1,17 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["venv", ".venv", "build", "dist", "migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]  # keep long-line ignore for now
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+no_implicit_optional = false
+explicit_package_bases = true
+# Note: Removed mypy_path to avoid "Source file found twice" errors.
+# This allows both `mypy .` and `mypy src/` to work correctly.
+

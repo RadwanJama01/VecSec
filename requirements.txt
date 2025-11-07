@@ -20,11 +20,12 @@ sentence-transformers>=2.2.0
 # Metrics and monitoring
 prometheus-client>=0.21.0
 
+# --- Dev / CI dependencies ---
 # Testing
-pytest>=7.0.0
-pytest-cov>=4.0.0  # Coverage reporting
+pytest>=8.0.0
+pytest-cov>=5.0.0  # Coverage reporting
 
 # Code quality
-ruff>=0.1.0  # Fast Python linter
-mypy>=1.5.0  # Static type checker
+ruff>=0.4.0  # Fast Python linter
+mypy>=1.7.0  # Static type checker
 
