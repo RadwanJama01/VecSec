@@ -2,7 +2,7 @@
 RLS Enforcer - Comprehensive Row-Level Security enforcement
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from typing import Dict, Any, List
 from .policy_manager import TENANT_POLICIES, ROLE_POLICIES
@@ -116,7 +116,7 @@ def rlsa_guard_comprehensive(
                 policy_context["bypassed_threats"] = {
                     "threats": role_dependent_detected,
                     "reason": f"Role {user_role} has privilege to bypass",
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 }
     
     # 0.5. Role-based Access Control and Clearance Level Check
@@ -280,7 +280,7 @@ def rlsa_guard_comprehensive(
                 "requester_tenant": user_tenant,
                 "target_tenant": target_tenant
             },
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "incident_id": str(uuid.uuid4()),
             "recommendation": "Review access permissions or adjust query scope to comply with tenant isolation and clearance policies."
         }

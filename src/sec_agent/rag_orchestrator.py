@@ -5,15 +5,19 @@ RAG Orchestrator - RAG graph and orchestration logic
 import json
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, TypedDict, Dict, Any
 from langchain_core.documents import Document
 from langgraph.graph import StateGraph, START
 
+import logging
 from .query_parser import extract_query_context
-from .metadata_generator import generate_retrieval_metadata
+from .metadata_generator import generate_retrieval_metadata, generate_retrieval_metadata_real
 from .rls_enforcer import rlsa_guard_comprehensive
-from .config import METRICS_ENABLED
+from .config import METRICS_ENABLED, USE_REAL_VECTOR_RETRIEVAL
+
+# Set up module-level logger
+logger = logging.getLogger(__name__)
 
 # Import metrics_exporter if available
 try:
@@ -72,7 +76,65 @@ class RAGOrchestrator:
         }
         
         query_context = extract_query_context(query)
-        retrieval_metadata = generate_retrieval_metadata(query_context, tenant_id)
+        
+        # Migration: Use real vector store if feature flag enabled, otherwise use mock
+        if USE_REAL_VECTOR_RETRIEVAL and self.vector_store is not None:
+            logger.info(
+                "Using real vector store for retrieval metadata",
+                extra={
+                    "tenant_id": tenant_id,
+                    "migration": "real_vector_retrieval",
+                    "query_preview": query[:100] if query else ""
+                }
+            )
+            try:
+                retrieval_metadata = generate_retrieval_metadata_real(
+                    query_context, 
+                    tenant_id, 
+                    self.vector_store
+                )
+                logger.debug(
+                    f"Real vector retrieval successful: {len(retrieval_metadata)} results",
+                    extra={
+                        "tenant_id": tenant_id,
+                        "result_count": len(retrieval_metadata),
+                        "migration": "real_vector_retrieval"
+                    }
+                )
+            except Exception as e:
+                # Fallback to mock on error (backward compatibility)
+                # Only log full traceback at DEBUG level to reduce noise in tests
+                logger.warning(
+                    f"Real vector retrieval failed, falling back to mock: {e}",
+                    exc_info=logger.isEnabledFor(logging.DEBUG),  # Full traceback only in DEBUG mode
+                    extra={
+                        "tenant_id": tenant_id,
+                        "migration": "real_vector_retrieval_fallback",
+                        "error_type": type(e).__name__
+                    }
+                )
+                retrieval_metadata = generate_retrieval_metadata(query_context, tenant_id)
+        else:
+            # Backward compatibility: Use mock metadata generator
+            if not USE_REAL_VECTOR_RETRIEVAL:
+                logger.debug(
+                    "Feature flag disabled, using mock metadata generator",
+                    extra={
+                        "tenant_id": tenant_id,
+                        "migration": "mock_metadata",
+                        "feature_flag": "USE_REAL_VECTOR_RETRIEVAL=false"
+                    }
+                )
+            elif self.vector_store is None:
+                logger.warning(
+                    "Vector store is None, falling back to mock metadata generator",
+                    extra={
+                        "tenant_id": tenant_id,
+                        "migration": "mock_metadata_fallback",
+                        "reason": "vector_store_none"
+                    }
+                )
+            retrieval_metadata = generate_retrieval_metadata(query_context, tenant_id)
         
         # Step 2: Comprehensive RLSA Enforcement
         decision = rlsa_guard_comprehensive(
@@ -130,7 +192,7 @@ class RAGOrchestrator:
                     metrics_exporter.track_learning_event({
                         "type": "pattern_learned",
                         "attack_type": attack_metadata["attack_type"],
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     })
             
             # Flush any pending batch items
@@ -156,7 +218,7 @@ class RAGOrchestrator:
                 "violations_found": 0,
                 "compliance_status": "FULL_COMPLIANCE"
             },
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "incident_id": str(uuid.uuid4())
         }
         

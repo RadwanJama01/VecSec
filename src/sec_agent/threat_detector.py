@@ -2,7 +2,7 @@
 Contextual Threat Embedding - Threat pattern learning and detection
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict
 import numpy as np
 from .embeddings_client import EmbeddingClient
@@ -57,7 +57,7 @@ QUERY: {query}"""
             'user_context': user_context,
             'attack_metadata': attack_metadata,
             'was_blocked': was_blocked,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
         
         self.learned_patterns.append(pattern)
