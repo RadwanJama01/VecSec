@@ -43,7 +43,7 @@ jobs:
       
       - name: Run mypy (type checking)
         run: |
-          mypy src/sec_agent/ --ignore-missing-imports --no-strict-optional || true
+          mypy . --ignore-missing-imports --no-strict-optional || true
         continue-on-error: true  # Type checking is non-blocking for now
 
   unit-tests:

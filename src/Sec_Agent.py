@@ -7,26 +7,40 @@ This file maintains backward compatibility with existing imports.
 New code should import from src.sec_agent package directly.
 
 Example:
-    from src.sec_agent import RAGOrchestrator, QwenEmbeddingClient
+    from src.sec_agent import RAGOrchestrator, EmbeddingClient
     # or
     from src.sec_agent.cli import main
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to Python path for imports
+# This allows running: python3 src/Sec_Agent.py
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 # Import components for backward compatibility
-from src.sec_agent.config import METRICS_ENABLED, initialize_vector_store, initialize_sample_documents, create_rag_prompt_template
-from src.sec_agent.mock_llm import MockLLM, MockEmbeddings
-from src.sec_agent.embeddings_client import QwenEmbeddingClient
-from src.sec_agent.threat_detector import ContextualThreatEmbedding
-from src.sec_agent.policy_manager import TENANT_POLICIES, ROLE_POLICIES
-from src.sec_agent.query_parser import extract_query_context
-from src.sec_agent.metadata_generator import generate_retrieval_metadata
-from src.sec_agent.rls_enforcer import rlsa_guard_comprehensive
-from src.sec_agent.rag_orchestrator import RAGOrchestrator
+# Imports after path setup - needed for running script directly
+from src.sec_agent.config import (  # noqa: E402
+    create_rag_prompt_template,
+    initialize_sample_documents,
+    initialize_vector_store,
+)
+from src.sec_agent.embeddings_client import EmbeddingClient  # noqa: E402
+from src.sec_agent.mock_llm import MockEmbeddings, MockLLM  # noqa: E402
+from src.sec_agent.rag_orchestrator import RAGOrchestrator  # noqa: E402
+from src.sec_agent.threat_detector import ContextualThreatEmbedding  # noqa: E402
 
 # Initialize singleton instances for backward compatibility
 llm = MockLLM()
 embeddings = MockEmbeddings()
-qwen_client = QwenEmbeddingClient()
+qwen_client = (
+    EmbeddingClient()
+)  # Note: variable name kept as 'qwen_client' for backward compatibility
+# Backward compatibility alias for QwenEmbeddingClient
+QwenEmbeddingClient = EmbeddingClient
 threat_embedder = ContextualThreatEmbedding(qwen_client)
 
 # Initialize vector store
@@ -42,7 +56,7 @@ orchestrator = RAGOrchestrator(
     llm=llm,
     prompt_template=prompt,
     threat_embedder=threat_embedder,
-    qwen_client=qwen_client
+    qwen_client=qwen_client,
 )
 
 
@@ -53,7 +67,8 @@ def rag_with_rlsa(user_id, tenant_id, clearance, query, role="analyst"):
 
 def main():
     """Backward-compatible main function"""
-    from .sec_agent.cli import main as cli_main
+    from src.sec_agent.cli import main as cli_main
+
     cli_main()
 
 

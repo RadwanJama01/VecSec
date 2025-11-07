@@ -279,7 +279,7 @@ The CI pipeline (`.github/workflows/ci.yml`) runs three jobs in parallel:
 
 1. **Lint & Type Check** (`lint`)
    - Runs `ruff` for fast linting and formatting checks
-   - Runs `mypy` for static type checking
+   - Runs `mypy src/` for static type checking (note: use `mypy src/` not `mypy .`)
    - Fast feedback (< 2 minutes)
 
 2. **Unit Tests** (`unit-tests`)
@@ -296,24 +296,49 @@ The CI pipeline (`.github/workflows/ci.yml`) runs three jobs in parallel:
 
 ### Running Tests Locally
 
-#### Mock Retrieval (Unit Tests)
+#### Quick: Run Full CI Pipeline Locally
 ```bash
-# Run unit tests with mock retrieval (fast)
+# Run the entire CI pipeline locally (matches GitHub Actions)
+./scripts/run_ci_locally.sh
+```
+
+This script runs:
+1. **Lint & Type Check**: `ruff check`, `ruff format --check`, `mypy`
+2. **Unit Tests**: Pytest with mock retrieval and coverage
+3. **Integration Tests**: Pytest with real ChromaDB vector store
+
+#### Manual: Individual CI Steps
+
+**1. Lint & Type Check (matches CI lint job)**
+```bash
+ruff check src/ scripts/ --output-format=github
+ruff format --check src/ scripts/
+mypy . --ignore-missing-imports --no-strict-optional
+```
+
+**2. Unit Tests (matches CI unit-tests job)**
+```bash
 export USE_REAL_VECTOR_RETRIEVAL=false
-pytest src/sec_agent/tests/ --maxfail=1 --disable-warnings --cov=src/sec_agent -v
+export LOG_LEVEL=WARNING
+pytest src/sec_agent/tests/ \
+  --maxfail=1 \
+  --disable-warnings \
+  --cov=src/sec_agent \
+  --cov-report=term-missing \
+  -v
 ```
 
-#### Real Retrieval (Integration Tests)
+**3. Integration Smoke Tests (matches CI integration-smoke job)**
 ```bash
-# Run integration tests with real vector store (ChromaDB)
 export USE_REAL_VECTOR_RETRIEVAL=true
-export USE_CHROMA=true  # Use ChromaDB for real vector store testing
-export CHROMA_PATH=./chroma_db_test  # Optional: separate test database
-pytest src/sec_agent/tests/test_rag_orchestrator_migration.py -v
-pytest src/sec_agent/tests/test_metadata_generator_real.py -v
+export USE_CHROMA=true
+export CHROMA_PATH=./chroma_db_ci
+pytest src/sec_agent/tests/test_rag_orchestrator_migration.py \
+  src/sec_agent/tests/test_metadata_generator_real.py \
+  -v
 ```
 
-#### All Tests
+#### All Tests (Quick)
 ```bash
 # Run all tests (unit + integration)
 pytest src/sec_agent/tests/ -v

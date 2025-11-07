@@ -25,8 +25,10 @@ def _make_mock_embeddings(dim: int = 384):
     class MockEmbeddings:
         def embed_documents(self, texts):
             return [[0.1] * dim for _ in texts]
+
         def embed_query(self, text):
             return [0.1] * dim
+
     return MockEmbeddings()
 
 
@@ -39,8 +41,9 @@ def test_inmemory_fallback_when_disabled():
     os.environ["USE_CHROMA"] = "false"
 
     try:
-        from src.sec_agent import config
         from langchain_core.vectorstores import InMemoryVectorStore
+
+        from src.sec_agent import config
 
         store = config.initialize_vector_store(_make_mock_embeddings())
         assert isinstance(store, InMemoryVectorStore), "Expected InMemory when USE_CHROMA=false"
@@ -65,8 +68,9 @@ def test_chroma_path_and_fallback_behavior():
     os.environ["CHROMA_PATH"] = tmp_path
 
     try:
-        from src.sec_agent import config
         from langchain_core.vectorstores import InMemoryVectorStore
+
+        from src.sec_agent import config
 
         # Ensure directory does not exist beforehand
         path_obj = Path(tmp_path)
@@ -90,7 +94,9 @@ def test_chroma_path_and_fallback_behavior():
             assert path_obj.exists(), "CHROMA_PATH directory should be created when using Chroma"
             print(f"✅ CHROMA_PATH exists: {tmp_path}")
         else:
-            assert isinstance(store, InMemoryVectorStore), "Should fall back to InMemory when Chroma unavailable"
+            assert isinstance(store, InMemoryVectorStore), (
+                "Should fall back to InMemory when Chroma unavailable"
+            )
             print("✅ Fell back to InMemory when Chroma unavailable")
 
     except AssertionError as e:
@@ -134,6 +140,7 @@ def test_chroma_cloud_setup_optional():
     reset_env()
     try:
         import importlib
+
         module = importlib.import_module("src.CHROMA_CLOUD_SETUP")
         setup_fn = getattr(module, "setup_chroma_cloud", None)
         get_coll = getattr(module, "get_collection", None)
@@ -169,5 +176,3 @@ if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("🏁 ChromaDB Integration Diagnostics Complete")
     print("=" * 60)
-
-

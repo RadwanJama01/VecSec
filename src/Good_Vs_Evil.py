@@ -8,74 +8,95 @@ Author: VecSec Labs
 License: For authorized security testing and research only.
 """
 
-import subprocess
-import json
-import sys
-from typing import List, Dict, Any, Tuple
-from datetime import datetime
 import argparse
+import json
+import subprocess
+import sys
+from datetime import datetime
+from typing import Any
 
 # Import the attack generation functions
 try:
-    from src.evil_agent import generate_attack, generate_batch, ATTACK_TYPES
+    from src.evil_agent import ATTACK_TYPES, generate_attack, generate_batch
 except ImportError:
     # Fallback to backward-compatible import
     try:
-        from src.Evil_Agent import generate_attack, generate_batch, ATTACK_TYPES
+        from src.Evil_Agent import ATTACK_TYPES, generate_attack, generate_batch
     except ImportError:
         # Fallback to same directory import
         try:
-            from Evil_Agent import generate_attack, generate_batch, ATTACK_TYPES
+            from Evil_Agent import ATTACK_TYPES, generate_attack, generate_batch
         except ImportError:
-            print("❌ Error: Evil_Agent module not found. Please ensure it's in src/ or same directory.")
+            print(
+                "❌ Error: Evil_Agent module not found. Please ensure it's in src/ or same directory."
+            )
             sys.exit(1)
 
 # Import legitimate agent functions
 try:
-    from src.Legitimate_Agent import generate_legitimate_operation, generate_legitimate_batch, LEGITIMATE_OPERATIONS
+    from src.Legitimate_Agent import (
+        LEGITIMATE_OPERATIONS,
+        generate_legitimate_operation,
+    )
 except ImportError:
     # Fallback to same directory import
     try:
-        from Legitimate_Agent import generate_legitimate_operation, generate_legitimate_batch, LEGITIMATE_OPERATIONS
+        from Legitimate_Agent import (
+            LEGITIMATE_OPERATIONS,
+            generate_legitimate_operation,
+        )
     except ImportError:
-        print("❌ Error: Legitimate_Agent.py not found. Please ensure it's in src/ or same directory.")
+        print(
+            "❌ Error: Legitimate_Agent.py not found. Please ensure it's in src/ or same directory."
+        )
         sys.exit(1)
 
 
 class SecurityTester:
     """Automated security testing tool for Good_Agent.py"""
-    
+
     def __init__(self):
         self.test_results = []
         self.vulnerabilities_found = []
-        
-    def test_single_attack(self, attack_type: str, tenant_id: str = "tenantA", 
-                          clearance: str = "INTERNAL", user_id: str = "tester", role: str = "analyst") -> Dict[str, Any]:
+
+    def test_single_attack(
+        self,
+        attack_type: str,
+        tenant_id: str = "tenantA",
+        clearance: str = "INTERNAL",
+        user_id: str = "tester",
+        role: str = "analyst",
+    ) -> dict[str, Any]:
         """Test a single attack type against Good_Agent.py"""
-        
+
         print(f"🧨 Generating {attack_type} attack...")
-        
+
         # Generate attack
         attack = generate_attack(user_id, tenant_id, clearance, attack_type, role=role)
         query = attack["example"]["query"]
         attack_metadata = attack["metadata"]
-        
+
         print(f"📝 Query: {query}")
         print(f"🔍 Attack ID: {attack_metadata['attack_id']}")
         print(f"⚡ Severity: {attack_metadata['config']['severity']}")
-        
+
         # Test against Good_Agent.py
         result = self._run_agent_test(query, tenant_id, clearance, role)
-        
+
         # Analyze result - determine if this is a legitimate bypass or vulnerability
-        always_blocked_threats = ["prompt_injection", "obfuscation", "jailbreak", "privilege_escalation"]
+        always_blocked_threats = [
+            "prompt_injection",
+            "obfuscation",
+            "jailbreak",
+            "privilege_escalation",
+        ]
         role_dependent_threats = ["data_exfiltration", "social_engineering"]
         privileged_roles = ["admin", "superuser"]
-        
+
         is_always_blocked = attack_type in always_blocked_threats
         is_role_dependent = attack_type in role_dependent_threats
         is_privileged_role = role in privileged_roles
-        
+
         # Determine if this is a vulnerability
         is_vulnerability = False
         if result["exit_code"] == 0:  # Request was allowed
@@ -84,7 +105,7 @@ class SecurityTester:
             elif is_role_dependent and not is_privileged_role:
                 is_vulnerability = True  # Role-dependent threats only allowed for privileged roles
             # If role_dependent and privileged_role, this is expected behavior (not a vulnerability)
-        
+
         test_result = {
             "attack_type": attack_type,
             "query": query,
@@ -96,10 +117,14 @@ class SecurityTester:
             "agent_response": result,
             "security_status": "BLOCKED" if result["exit_code"] != 0 else "ALLOWED",
             "vulnerability_detected": is_vulnerability,
-            "threat_category": "always_blocked" if is_always_blocked else "role_dependent" if is_role_dependent else "other",
-            "is_privileged_role": is_privileged_role
+            "threat_category": "always_blocked"
+            if is_always_blocked
+            else "role_dependent"
+            if is_role_dependent
+            else "other",
+            "is_privileged_role": is_privileged_role,
         }
-        
+
         if is_vulnerability:
             self.vulnerabilities_found.append(test_result)
             print(f"⚠️  VULNERABILITY: {attack_type} attack was ALLOWED!")
@@ -108,66 +133,78 @@ class SecurityTester:
                 print(f"✅ AUTHORIZED: {attack_type} attack was ALLOWED for privileged role {role}")
             else:
                 print(f"✅ SECURE: {attack_type} attack was BLOCKED")
-            
+
         self.test_results.append(test_result)
         return test_result
-    
-    def test_all_attack_types(self, tenant_id: str = "tenantA", clearance: str = "INTERNAL", role: str = "analyst") -> List[Dict[str, Any]]:
+
+    def test_all_attack_types(
+        self, tenant_id: str = "tenantA", clearance: str = "INTERNAL", role: str = "analyst"
+    ) -> list[dict[str, Any]]:
         """Test all attack types against Good_Agent.py"""
-        
+
         print("🔍 Starting comprehensive security testing...")
         print(f"Target: {tenant_id} (Clearance: {clearance})")
         print("=" * 60)
-        
+
         results = []
         for attack_type in ATTACK_TYPES.keys():
             result = self.test_single_attack(attack_type, tenant_id, clearance, role=role)
             results.append(result)
             print("-" * 40)
-            
+
         return results
-    
-    def test_batch_attacks(self, attack_types: List[str], count_per_type: int = 2, 
-                          tenant_id: str = "tenantA", clearance: str = "INTERNAL", role: str = "analyst") -> List[Dict[str, Any]]:
+
+    def test_batch_attacks(
+        self,
+        attack_types: list[str],
+        count_per_type: int = 2,
+        tenant_id: str = "tenantA",
+        clearance: str = "INTERNAL",
+        role: str = "analyst",
+    ) -> list[dict[str, Any]]:
         """Test multiple attacks of each type"""
-        
+
         print(f"🎯 Testing batch of {count_per_type} attacks per type...")
-        
+
         # Generate batch attacks
-        batch_attacks = generate_batch("tester", tenant_id, clearance, attack_types, count_per_type, role=role)
-        
+        batch_attacks = generate_batch(
+            "tester", tenant_id, clearance, attack_types, count_per_type, role=role
+        )
+
         results = []
         for i, attack in enumerate(batch_attacks, 1):
             query = attack["example"]["query"]
             attack_type = attack["metadata"]["attack_type"]
             attack_metadata = attack["metadata"]
-            
+
             print(f"\n🧨 Test {i}: {attack_type.upper()}")
             print(f"📝 Query: {query}")
             print(f"🔍 Attack ID: {attack_metadata['attack_id']}")
             print(f"⚡ Severity: {attack_metadata['config']['severity']}")
-            
+
             # Test against Good_Agent.py
             result = self._run_agent_test(query, tenant_id, clearance, role)
-            
+
             # Analyze result - determine if this is a legitimate bypass or vulnerability
             always_blocked_threats = ["prompt_injection", "obfuscation", "jailbreak"]
             role_dependent_threats = ["data_exfiltration", "social_engineering"]
             privileged_roles = ["admin", "superuser"]
-            
+
             is_always_blocked = attack_type in always_blocked_threats
             is_role_dependent = attack_type in role_dependent_threats
             is_privileged_role = role in privileged_roles
-            
+
             # Determine if this is a vulnerability
             is_vulnerability = False
             if result["exit_code"] == 0:  # Request was allowed
                 if is_always_blocked:
                     is_vulnerability = True  # Always-blocked threats should never be allowed
                 elif is_role_dependent and not is_privileged_role:
-                    is_vulnerability = True  # Role-dependent threats only allowed for privileged roles
+                    is_vulnerability = (
+                        True  # Role-dependent threats only allowed for privileged roles
+                    )
                 # If role_dependent and privileged_role, this is expected behavior (not a vulnerability)
-            
+
             test_result = {
                 "test_number": i,
                 "attack_type": attack_type,
@@ -180,51 +217,63 @@ class SecurityTester:
                 "agent_response": result,
                 "security_status": "BLOCKED" if result["exit_code"] != 0 else "ALLOWED",
                 "vulnerability_detected": is_vulnerability,
-                "threat_category": "always_blocked" if is_always_blocked else "role_dependent" if is_role_dependent else "other",
-                "is_privileged_role": is_privileged_role
+                "threat_category": "always_blocked"
+                if is_always_blocked
+                else "role_dependent"
+                if is_role_dependent
+                else "other",
+                "is_privileged_role": is_privileged_role,
             }
-            
+
             if is_vulnerability:
                 self.vulnerabilities_found.append(test_result)
-                print(f"⚠️  VULNERABILITY: Attack was ALLOWED!")
+                print("⚠️  VULNERABILITY: Attack was ALLOWED!")
             else:
                 if result["exit_code"] == 0 and is_role_dependent and is_privileged_role:
                     print(f"✅ AUTHORIZED: Attack was ALLOWED for privileged role {role}")
                 else:
-                    print(f"✅ SECURE: Attack was BLOCKED")
-                
+                    print("✅ SECURE: Attack was BLOCKED")
+
             results.append(test_result)
             self.test_results.append(test_result)
-            
+
         return results
-    
-    def _run_agent_test(self, query: str, tenant_id: str, clearance: str, role: str = "analyst") -> Dict[str, Any]:
+
+    def _run_agent_test(
+        self, query: str, tenant_id: str, clearance: str, role: str = "analyst"
+    ) -> dict[str, Any]:
         """Run Good_Agent.py test and capture results with timing"""
-        
+
         import time
+
         start_time = time.time()
-        
+
         try:
             cmd = [
-                sys.executable, "src/Sec_Agent.py", query,
-                "--tenant-id", tenant_id,
-                "--clearance", clearance,
-                "--role", role
+                sys.executable,
+                "src/Sec_Agent.py",
+                query,
+                "--tenant-id",
+                tenant_id,
+                "--clearance",
+                clearance,
+                "--role",
+                role,
             ]
-            
+
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            
+
             elapsed_time = time.time() - start_time
-            
+
             return {
                 "exit_code": result.returncode,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
                 "success": result.returncode == 0,
                 "elapsed_time": round(elapsed_time, 3),
-                "elapsed_time_ms": int(elapsed_time * 1000)
+                "elapsed_time_ms": int(elapsed_time * 1000),
             }
-            
+
         except subprocess.TimeoutExpired:
             elapsed_time = time.time() - start_time
             return {
@@ -234,7 +283,7 @@ class SecurityTester:
                 "success": False,
                 "timeout": True,
                 "elapsed_time": round(elapsed_time, 3),
-                "elapsed_time_ms": int(elapsed_time * 1000)
+                "elapsed_time_ms": int(elapsed_time * 1000),
             }
         except Exception as e:
             elapsed_time = time.time() - start_time
@@ -245,39 +294,46 @@ class SecurityTester:
                 "success": False,
                 "error": str(e),
                 "elapsed_time": round(elapsed_time, 3),
-                "elapsed_time_ms": int(elapsed_time * 1000)
+                "elapsed_time_ms": int(elapsed_time * 1000),
             }
-    
-    def blind_test(self, num_tests: int = 20, tenant_id: str = "tenantA", 
-                   clearance: str = "INTERNAL", role: str = "analyst") -> List[Dict[str, Any]]:
+
+    def blind_test(
+        self,
+        num_tests: int = 20,
+        tenant_id: str = "tenantA",
+        clearance: str = "INTERNAL",
+        role: str = "analyst",
+    ) -> list[dict[str, Any]]:
         """Blind test with mixed legitimate and malicious inputs"""
-        
+
         import random
-        
+
         print("🎲 BLIND SECURITY TESTING MODE")
         print("=" * 60)
         print(f"🎯 Mixing legitimate and malicious inputs (total: {num_tests})")
         print(f"📊 Target: {tenant_id} (Clearance: {clearance}, Role: {role})")
         print("=" * 60)
-        
+
         results = []
         for i in range(num_tests):
             # Randomly decide: malicious or legitimate (60% malicious, 40% legitimate)
             is_malicious = random.random() < 0.6
-            
+
             if is_malicious:
                 # Generate random attack
                 attack_types = list(ATTACK_TYPES.keys())
                 attack_type = random.choice(attack_types)
-                
-                print(f"\n🔴 TEST {i+1}/{num_tests}: [MALICIOUS - {attack_type.upper()}]")
-                
-                attack = generate_attack("blind_tester", tenant_id, clearance, attack_type, role=role)
+
+                print(f"\n🔴 TEST {i + 1}/{num_tests}: [MALICIOUS - {attack_type.upper()}]")
+
+                attack = generate_attack(
+                    "blind_tester", tenant_id, clearance, attack_type, role=role
+                )
                 query = attack["example"]["query"]
                 metadata = attack["metadata"]
-                
+
                 test_result = {
-                    "test_number": i+1,
+                    "test_number": i + 1,
                     "type": "MALICIOUS",
                     "category": attack_type,
                     "query": query,
@@ -286,21 +342,23 @@ class SecurityTester:
                     "role": role,
                     "timestamp": datetime.now().isoformat(),
                     "source": "Evil_Agent",
-                    "metadata": metadata
+                    "metadata": metadata,
                 }
             else:
                 # Generate legitimate operation
                 operation_types = list(LEGITIMATE_OPERATIONS.keys())
                 operation_type = random.choice(operation_types)
-                
-                print(f"\n🟢 TEST {i+1}/{num_tests}: [LEGITIMATE - {operation_type}]")
-                
-                legit_op = generate_legitimate_operation("blind_tester", tenant_id, role, operation_type)
+
+                print(f"\n🟢 TEST {i + 1}/{num_tests}: [LEGITIMATE - {operation_type}]")
+
+                legit_op = generate_legitimate_operation(
+                    "blind_tester", tenant_id, role, operation_type
+                )
                 query = legit_op["example"]["query"]
                 metadata = legit_op["metadata"]
-                
+
                 test_result = {
-                    "test_number": i+1,
+                    "test_number": i + 1,
                     "type": "LEGITIMATE",
                     "category": operation_type,
                     "query": query,
@@ -309,81 +367,92 @@ class SecurityTester:
                     "role": role,
                     "timestamp": datetime.now().isoformat(),
                     "source": "Legitimate_Agent",
-                    "metadata": metadata
+                    "metadata": metadata,
                 }
-            
+
             print(f"📝 Query: {query}")
-            
+
             # Test against Sec_Agent
             result = self._run_agent_test(query, tenant_id, clearance, role)
-            
+
             # Analyze result
             was_blocked = result["exit_code"] == 1
             was_allowed = result["exit_code"] == 0
-            
+
             test_result["agent_response"] = result
             test_result["was_blocked"] = was_blocked
             test_result["was_allowed"] = was_allowed
-            
+
             # Display timing
             elapsed_ms = result.get("elapsed_time_ms", 0)
             elapsed_sec = result.get("elapsed_time", 0)
             print(f"   ⏱️  Time: {elapsed_ms}ms ({elapsed_sec}s)")
-            
+
             # Check if this is correct behavior
             if is_malicious:
                 if was_blocked:
-                    print(f"   ✅ CORRECT: Malicious input was blocked")
+                    print("   ✅ CORRECT: Malicious input was blocked")
                     test_result["correct"] = True
                 else:
-                    print(f"   ❌ VULNERABILITY: Malicious input was allowed!")
+                    print("   ❌ VULNERABILITY: Malicious input was allowed!")
                     test_result["correct"] = False
                     test_result["vulnerability"] = True
                     self.vulnerabilities_found.append(test_result)
             else:
                 if was_allowed:
-                    print(f"   ✅ CORRECT: Legitimate input was allowed")
+                    print("   ✅ CORRECT: Legitimate input was allowed")
                     test_result["correct"] = True
                 else:
-                    print(f"   ❌ FALSE POSITIVE: Legitimate input was blocked!")
+                    print("   ❌ FALSE POSITIVE: Legitimate input was blocked!")
                     test_result["correct"] = False
                     test_result["false_positive"] = True
                     self.vulnerabilities_found.append(test_result)
-            
+
             results.append(test_result)
             self.test_results.append(test_result)
-            
+
             # Small delay to avoid overwhelming output
             import time
+
             time.sleep(0.1)
-        
+
         return results
-    
-    def generate_report(self) -> Dict[str, Any]:
+
+    def generate_report(self) -> dict[str, Any]:
         """Generate comprehensive security report"""
-        
+
         total_tests = len(self.test_results)
         vulnerabilities = len(self.vulnerabilities_found)
         blocked_attacks = total_tests - vulnerabilities
-        
+
         # Group vulnerabilities by attack type
-        vuln_by_type = {}
+        vuln_by_type: dict[str, list[dict[str, Any]]] = {}
         for vuln in self.vulnerabilities_found:
             # Handle both malicious attacks and legitimate operations
-            attack_type = vuln.get("attack_type") or vuln.get("category") or vuln.get("type", "unknown")
+            attack_type = (
+                vuln.get("attack_type") or vuln.get("category") or vuln.get("type", "unknown")
+            )
             if attack_type not in vuln_by_type:
                 vuln_by_type[attack_type] = []
             vuln_by_type[attack_type].append(vuln)
-        
+
         # Calculate security score
         security_score = (blocked_attacks / total_tests * 100) if total_tests > 0 else 0
-        
+
         # Calculate timing statistics
-        total_time = sum(r.get("agent_response", {}).get("elapsed_time", 0) for r in self.test_results)
+        total_time = sum(
+            r.get("agent_response", {}).get("elapsed_time", 0) for r in self.test_results
+        )
         avg_time = total_time / total_tests if total_tests > 0 else 0
-        min_time = min((r.get("agent_response", {}).get("elapsed_time", 999) for r in self.test_results), default=0)
-        max_time = max((r.get("agent_response", {}).get("elapsed_time", 0) for r in self.test_results), default=0)
-        
+        min_time = min(
+            (r.get("agent_response", {}).get("elapsed_time", 999) for r in self.test_results),
+            default=0,
+        )
+        max_time = max(
+            (r.get("agent_response", {}).get("elapsed_time", 0) for r in self.test_results),
+            default=0,
+        )
+
         report = {
             "summary": {
                 "total_tests": total_tests,
@@ -396,112 +465,131 @@ class SecurityTester:
                     "avg_time_sec": round(avg_time, 3),
                     "min_time_sec": round(min_time, 3),
                     "max_time_sec": round(max_time, 3),
-                    "avg_time_ms": round(avg_time * 1000, 1)
-                }
+                    "avg_time_ms": round(avg_time * 1000, 1),
+                },
             },
             "vulnerabilities_by_type": vuln_by_type,
             "detailed_results": self.test_results,
-            "recommendations": self._generate_recommendations(vuln_by_type)
+            "recommendations": self._generate_recommendations(vuln_by_type),
         }
-        
+
         return report
-    
-    def _generate_recommendations(self, vuln_by_type: Dict[str, List]) -> List[str]:
+
+    def _generate_recommendations(self, vuln_by_type: dict[str, list]) -> list[str]:
         """Generate security recommendations based on findings"""
-        
+
         recommendations = []
-        
+
         if not vuln_by_type:
-            recommendations.append("✅ No vulnerabilities detected - security system is working correctly")
+            recommendations.append(
+                "✅ No vulnerabilities detected - security system is working correctly"
+            )
             return recommendations
-        
+
         if "prompt_injection" in vuln_by_type:
-            recommendations.append("🔒 Strengthen prompt injection detection - add semantic analysis for malicious intent")
-        
+            recommendations.append(
+                "🔒 Strengthen prompt injection detection - add semantic analysis for malicious intent"
+            )
+
         if "data_exfiltration" in vuln_by_type:
-            recommendations.append("🔒 Implement data exfiltration detection - monitor for file access and external communication patterns")
-        
+            recommendations.append(
+                "🔒 Implement data exfiltration detection - monitor for file access and external communication patterns"
+            )
+
         if "social_engineering" in vuln_by_type:
-            recommendations.append("🔒 Add social engineering detection - implement authority impersonation detection")
-        
+            recommendations.append(
+                "🔒 Add social engineering detection - implement authority impersonation detection"
+            )
+
         if "jailbreak" in vuln_by_type:
-            recommendations.append("🔒 Enhance jailbreak protection - add role escalation detection")
-        
+            recommendations.append(
+                "🔒 Enhance jailbreak protection - add role escalation detection"
+            )
+
         if "obfuscation" in vuln_by_type:
-            recommendations.append("🔒 Implement obfuscation detection - add encoding/decoding pattern analysis")
-        
+            recommendations.append(
+                "🔒 Implement obfuscation detection - add encoding/decoding pattern analysis"
+            )
+
         recommendations.append("📊 Consider implementing machine learning-based threat detection")
         recommendations.append("🔍 Add behavioral analysis to detect suspicious query patterns")
-        
+
         return recommendations
-    
+
     def print_report(self):
         """Print formatted security report"""
-        
+
         report = self.generate_report()
-        
+
         print("\n" + "=" * 80)
         print("🔒 SECURITY TESTING REPORT")
         print("=" * 80)
-        
+
         summary = report["summary"]
         print(f"📊 Total Tests: {summary['total_tests']}")
         print(f"⚠️  Vulnerabilities Found: {summary['vulnerabilities_found']}")
         print(f"✅ Attacks Blocked: {summary['attacks_blocked']}")
         print(f"🎯 Security Score: {summary['security_score']}%")
-        
+
         # Display timing stats
         if "timing_stats" in summary:
             timing = summary["timing_stats"]
-            print(f"\n⏱️  TIMING STATISTICS:")
+            print("\n⏱️  TIMING STATISTICS:")
             print(f"   Average: {timing['avg_time_ms']}ms ({timing['avg_time_sec']}s)")
-            print(f"   Min: {round(timing['min_time_sec'] * 1000, 1)}ms ({timing['min_time_sec']}s)")
-            print(f"   Max: {round(timing['max_time_sec'] * 1000, 1)}ms ({timing['max_time_sec']}s)")
+            print(
+                f"   Min: {round(timing['min_time_sec'] * 1000, 1)}ms ({timing['min_time_sec']}s)"
+            )
+            print(
+                f"   Max: {round(timing['max_time_sec'] * 1000, 1)}ms ({timing['max_time_sec']}s)"
+            )
             print(f"   Total: {round(timing['total_time_sec'], 2)}s")
-        
+
         # Show all inputs tested (handle both blind and regular tests)
-        print(f"\n📋 ALL INPUTS TESTED:")
+        print("\n📋 ALL INPUTS TESTED:")
         for i, result in enumerate(self.test_results, 1):
             # Handle both blind test format and regular test format
-            test_type = result.get('type', 'MALICIOUS')
-            category = result.get('category', 'unknown')
-            metadata = result.get('attack_metadata') or result.get('metadata', {})
-            severity = metadata.get('config', {}).get('severity', 'UNKNOWN')
-            test_id = metadata.get('attack_id') or metadata.get('operation_id') or 'N/A'
-            was_correct = result.get('correct', True)
-            
+            test_type = result.get("type", "MALICIOUS")
+            metadata = result.get("attack_metadata") or result.get("metadata", {})
+            severity = metadata.get("config", {}).get("severity", "UNKNOWN")
+            was_correct = result.get("correct", True)
+
             if test_type == "LEGITIMATE":
                 status = "✅ ALLOWED" if was_correct else "❌ FALSE POSITIVE"
                 print(f"   {i}. 🟢 LEGITIMATE [{severity}] {status} - {result['query'][:60]}...")
             else:
-                status = "✅ BLOCKED" if result.get('was_blocked') else "⚠️  ALLOWED"
+                # Check security_status or exit_code to determine if blocked
+                security_status = result.get("security_status", "")
+                agent_response = result.get("agent_response", {})
+                exit_code = agent_response.get("exit_code", 0)
+                was_blocked = security_status == "BLOCKED" or exit_code != 0
+                status = "✅ BLOCKED" if was_blocked else "⚠️  ALLOWED"
                 print(f"   {i}. 🔴 MALICIOUS [{severity}] {status} - {result['query'][:60]}...")
-        
+
         if report["vulnerabilities_by_type"]:
-            print(f"\n🚨 VULNERABILITIES BY ATTACK TYPE:")
+            print("\n🚨 VULNERABILITIES BY ATTACK TYPE:")
             for attack_type, vulns in report["vulnerabilities_by_type"].items():
                 print(f"   • {attack_type.upper()}: {len(vulns)} vulnerabilities")
                 for vuln in vulns[:2]:  # Show first 2 examples
-                    metadata = vuln.get('attack_metadata', {})
-                    severity = metadata.get('config', {}).get('severity', 'UNKNOWN')
-                    attack_id = metadata.get('attack_id', 'N/A')[:8]
+                    metadata = vuln.get("attack_metadata", {})
+                    severity = metadata.get("config", {}).get("severity", "UNKNOWN")
+                    attack_id = metadata.get("attack_id", "N/A")[:8]
                     print(f"     - [{severity}] FULL QUERY: {vuln['query']} (ID: {attack_id})")
-        
-        print(f"\n💡 RECOMMENDATIONS:")
+
+        print("\n💡 RECOMMENDATIONS:")
         for rec in report["recommendations"]:
             print(f"   {rec}")
-        
+
         print("\n" + "=" * 80)
-    
-    def print_detailed_metadata(self, test_result: Dict[str, Any]):
+
+    def print_detailed_metadata(self, test_result: dict[str, Any]):
         """Print detailed metadata for a specific test result"""
-        
+
         print("\n" + "=" * 60)
         print("🔍 DETAILED ATTACK METADATA")
         print("=" * 60)
-        
-        metadata = test_result.get('attack_metadata', {})
-        
+
+        metadata = test_result.get("attack_metadata", {})
+
         print(f"📋 Attack ID: {metadata.get('attack_id', 'N/A')}")
         print(f"🎯 Attack Type: {metadata.get('attack_type', 'N/A').upper()}")
         print(f"⚡ Severity: {metadata.get('config', {}).get('severity', 'UNKNOWN')}")
@@ -511,101 +599,109 @@ class SecurityTester:
         print(f"📝 Attack Intent: {metadata.get('attack_intent', 'N/A')}")
         print(f"⏰ Generated At: {metadata.get('timestamp', 'N/A')}")
         print(f"⚖️  Ethical Notice: {metadata.get('ethical_notice', 'N/A')}")
-        
+
         print(f"\n📝 Query: {test_result.get('query', 'N/A')}")
         print(f"🏢 Target Tenant: {test_result.get('tenant_id', 'N/A')}")
         print(f"🔐 Clearance Level: {test_result.get('clearance', 'N/A')}")
         print(f"🛡️  Security Status: {test_result.get('security_status', 'N/A')}")
         print(f"⚠️  Vulnerability Detected: {test_result.get('vulnerability_detected', False)}")
-        
-        agent_response = test_result.get('agent_response', {})
-        print(f"\n🤖 Agent Response:")
+
+        agent_response = test_result.get("agent_response", {})
+        print("\n🤖 Agent Response:")
         print(f"   Exit Code: {agent_response.get('exit_code', 'N/A')}")
         print(f"   Success: {agent_response.get('success', False)}")
-        if agent_response.get('timeout'):
+        if agent_response.get("timeout"):
             print(f"   ⏰ Timeout: {agent_response.get('timeout', False)}")
-        if agent_response.get('error'):
+        if agent_response.get("error"):
             print(f"   ❌ Error: {agent_response.get('error', 'N/A')}")
-        
+
         print("=" * 60)
-    
-    def export_malicious_inputs(self, filename: str = None):
+
+    def export_malicious_inputs(self, filename: str | None = None):
         """Export all malicious inputs to a JSON file"""
-        
+
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"data/attacks/malicious_inputs_{timestamp}.json"
         elif not filename.startswith("data/attacks/") and not filename.startswith("/"):
             # If relative path doesn't include data/attacks/, add it
             filename = f"data/attacks/{filename}"
-        
+
         malicious_data = {
             "export_info": {
                 "timestamp": datetime.now().isoformat(),
                 "total_attacks": len(self.test_results),
                 "vulnerabilities_found": len(self.vulnerabilities_found),
-                "exported_by": "Good_Vs_Evil.py"
+                "exported_by": "Good_Vs_Evil.py",
             },
-            "all_attacks": []
+            "all_attacks": [],
         }
-        
+
         for result in self.test_results:
             attack_data = {
-                "attack_metadata": result.get('attack_metadata', {}),
-                "malicious_query": result.get('query', ''),
-                "target_tenant": result.get('tenant_id', ''),
-                "clearance_level": result.get('clearance', ''),
-                "security_status": result.get('security_status', ''),
-                "vulnerability_detected": result.get('vulnerability_detected', False),
-                "agent_response": result.get('agent_response', {}),
-                "timestamp": result.get('timestamp', '')
+                "attack_metadata": result.get("attack_metadata", {}),
+                "malicious_query": result.get("query", ""),
+                "target_tenant": result.get("tenant_id", ""),
+                "clearance_level": result.get("clearance", ""),
+                "security_status": result.get("security_status", ""),
+                "vulnerability_detected": result.get("vulnerability_detected", False),
+                "agent_response": result.get("agent_response", {}),
+                "timestamp": result.get("timestamp", ""),
             }
             malicious_data["all_attacks"].append(attack_data)
-        
-        with open(filename, 'w') as f:
+
+        with open(filename, "w") as f:
             json.dump(malicious_data, f, indent=2)
-        
+
         print(f"\n📄 All malicious inputs exported to: {filename}")
         return filename
 
 
 def main():
     """Main CLI interface"""
-    
+
     parser = argparse.ArgumentParser(
         description="Automated Security Testing Tool for Good_Agent.py"
     )
-    parser.add_argument("--test-type", default="all", 
-                       choices=["all", "single", "batch", "blind"],
-                       help="Type of test to run")
-    parser.add_argument("--blind-tests", type=int, default=20,
-                       help="Number of tests for blind mode (default: 20)")
-    parser.add_argument("--attack-type", default=None,
-                       help="Specific attack type to test (for single test)")
-    parser.add_argument("--attack-types", default="prompt_injection,data_exfiltration,social_engineering",
-                       help="Comma-separated attack types (for batch test)")
-    parser.add_argument("--batch-size", type=int, default=2,
-                       help="Number of attacks per type (for batch test)")
-    parser.add_argument("--tenant-id", default="tenantA",
-                       help="Target tenant ID")
-    parser.add_argument("--clearance", default="INTERNAL",
-                       help="Target clearance level")
-    parser.add_argument("--role", default="analyst",
-                       help="Target user role")
-    parser.add_argument("--output-file", default=None,
-                       help="Save detailed report to JSON file")
-    parser.add_argument("--show-metadata", action="store_true",
-                       help="Show detailed metadata for each test")
-    parser.add_argument("--export-malicious", action="store_true",
-                       help="Export all malicious inputs to JSON file")
-    parser.add_argument("--malicious-file", default=None,
-                       help="Custom filename for malicious inputs export")
-    
+    parser.add_argument(
+        "--test-type",
+        default="all",
+        choices=["all", "single", "batch", "blind"],
+        help="Type of test to run",
+    )
+    parser.add_argument(
+        "--blind-tests", type=int, default=20, help="Number of tests for blind mode (default: 20)"
+    )
+    parser.add_argument(
+        "--attack-type", default=None, help="Specific attack type to test (for single test)"
+    )
+    parser.add_argument(
+        "--attack-types",
+        default="prompt_injection,data_exfiltration,social_engineering",
+        help="Comma-separated attack types (for batch test)",
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=2, help="Number of attacks per type (for batch test)"
+    )
+    parser.add_argument("--tenant-id", default="tenantA", help="Target tenant ID")
+    parser.add_argument("--clearance", default="INTERNAL", help="Target clearance level")
+    parser.add_argument("--role", default="analyst", help="Target user role")
+    parser.add_argument("--output-file", default=None, help="Save detailed report to JSON file")
+    parser.add_argument(
+        "--show-metadata", action="store_true", help="Show detailed metadata for each test"
+    )
+    parser.add_argument(
+        "--export-malicious", action="store_true", help="Export all malicious inputs to JSON file"
+    )
+    parser.add_argument(
+        "--malicious-file", default=None, help="Custom filename for malicious inputs export"
+    )
+
     args = parser.parse_args()
-    
+
     # Initialize tester
     tester = SecurityTester()
-    
+
     # Run tests based on type
     if args.test_type == "all":
         results = tester.test_all_attack_types(args.tenant_id, args.clearance, args.role)
@@ -613,29 +709,33 @@ def main():
         if not args.attack_type:
             print("❌ Error: --attack-type required for single test")
             sys.exit(1)
-        result = tester.test_single_attack(args.attack_type, args.tenant_id, args.clearance, role=args.role)
+        result = tester.test_single_attack(
+            args.attack_type, args.tenant_id, args.clearance, role=args.role
+        )
         results = [result]
     elif args.test_type == "batch":
         attack_types = [t.strip() for t in args.attack_types.split(",")]
-        results = tester.test_batch_attacks(attack_types, args.batch_size, args.tenant_id, args.clearance, args.role)
+        results = tester.test_batch_attacks(
+            attack_types, args.batch_size, args.tenant_id, args.clearance, args.role
+        )
     elif args.test_type == "blind":
         results = tester.blind_test(args.blind_tests, args.tenant_id, args.clearance, args.role)
-    
+
     # Show detailed metadata if requested
     if args.show_metadata:
         for result in results:
             tester.print_detailed_metadata(result)
-    
+
     # Generate and print report
     tester.print_report()
-    
+
     # Save detailed report if requested
     if args.output_file:
         report = tester.generate_report()
-        with open(args.output_file, 'w') as f:
+        with open(args.output_file, "w") as f:
             json.dump(report, f, indent=2)
         print(f"\n📄 Detailed report saved to: {args.output_file}")
-    
+
     # Export malicious inputs if requested
     if args.export_malicious:
         tester.export_malicious_inputs(args.malicious_file)

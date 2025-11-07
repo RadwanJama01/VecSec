@@ -5,14 +5,19 @@ Unit tests for Evil_Agent.py
 Tests for attack generation and privilege escalation
 """
 
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from Evil_Agent import generate_attack, generate_batch, generate_privilege_escalation_attack, ATTACK_TYPES
+from Evil_Agent import (
+    ATTACK_TYPES,
+    generate_attack,
+    generate_batch,
+    generate_privilege_escalation_attack,
+)
 
 
 class TestAttackGeneration(unittest.TestCase):

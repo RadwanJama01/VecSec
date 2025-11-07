@@ -12,28 +12,29 @@ Usage:
     python3 scripts/test_vector_store_connection.py
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Add project root to path
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
+
 def check_configuration():
     """Check if vector store configuration is set up"""
     print("=" * 70)
     print("Vector Store Connection Test")
     print("=" * 70)
-    
+
     # Test 1: Check configuration
     print("\n1️⃣  Checking Configuration...")
     use_chroma = os.getenv("USE_CHROMA", "false").lower() == "true"
     chroma_path = os.getenv("CHROMA_PATH", "./chroma_db")
-    
+
     print(f"   USE_CHROMA: {use_chroma}")
     print(f"   CHROMA_PATH: {chroma_path}")
-    
+
     # Check if ChromaDB path exists
     chroma_path_obj = Path(chroma_path)
     if chroma_path_obj.exists():
@@ -42,48 +43,50 @@ def check_configuration():
         file_count = len(list(chroma_path_obj.rglob("*")))
         print(f"   📁 Files in ChromaDB directory: {file_count}")
     else:
-        print(f"   ℹ️  ChromaDB directory doesn't exist yet (will be created on first use)")
-    
+        print("   ℹ️  ChromaDB directory doesn't exist yet (will be created on first use)")
+
     return use_chroma, chroma_path
+
 
 def check_code_locations():
     """Verify code locations and identify vector database"""
     print("\n2️⃣  Identifying Vector Database...")
-    
+
     config_file = project_root / "src" / "sec_agent" / "config.py"
     if config_file.exists():
         print(f"   ✅ Found initialization code: {config_file}")
-        
+
         # Read config file to find vector store type
         try:
-            with open(config_file, 'r') as f:
+            with open(config_file) as f:
                 content = f.read()
-                if 'Chroma' in content:
-                    print(f"   ✅ Vector database: ChromaDB")
-                if 'InMemoryVectorStore' in content:
-                    print(f"   ✅ Fallback: InMemoryVectorStore")
+                if "Chroma" in content:
+                    print("   ✅ Vector database: ChromaDB")
+                if "InMemoryVectorStore" in content:
+                    print("   ✅ Fallback: InMemoryVectorStore")
         except Exception as e:
             print(f"   ⚠️  Could not read config file: {e}")
     else:
         print(f"   ❌ Config file not found: {config_file}")
         return False
-    
+
     embeddings_file = project_root / "src" / "sec_agent" / "embeddings_client.py"
     if embeddings_file.exists():
         print(f"   ✅ Found embedding client: {embeddings_file}")
-        
+
         # Read to find model name
         try:
-            with open(embeddings_file, 'r') as f:
+            with open(embeddings_file) as f:
                 content = f.read()
-                if 'all-MiniLM-L6-v2' in content:
-                    print(f"   ✅ Embedding model: all-MiniLM-L6-v2 (SentenceTransformers)")
+                if "all-MiniLM-L6-v2" in content:
+                    print("   ✅ Embedding model: all-MiniLM-L6-v2 (SentenceTransformers)")
         except Exception as e:
             print(f"   ⚠️  Could not read embeddings file: {e}")
     else:
-        print(f"   ⚠️  Embeddings file not found")
-    
+        print("   ⚠️  Embeddings file not found")
+
     return True
+
 
 def check_connection_parameters():
     """Document connection parameters needed"""
@@ -94,66 +97,73 @@ def check_connection_parameters():
     print("\n   Optional but recommended:")
     print("   - LOG_FILE: Path to log file (optional)")
     print("   - LOG_LEVEL: Logging level (default: INFO)")
-    
+
     # Check .env file
     env_file = project_root / ".env"
     if env_file.exists():
         print(f"\n   ✅ Found .env file: {env_file}")
         try:
-            with open(env_file, 'r') as f:
+            with open(env_file) as f:
                 lines = f.readlines()
-                chroma_vars = [l.strip() for l in lines if 'CHROMA' in l.upper() or 'USE_CHROMA' in l.upper()]
+                chroma_vars = [
+                    line.strip()
+                    for line in lines
+                    if "CHROMA" in line.upper() or "USE_CHROMA" in line.upper()
+                ]
                 if chroma_vars:
-                    print(f"   📋 ChromaDB-related variables in .env:")
+                    print("   📋 ChromaDB-related variables in .env:")
                     for var in chroma_vars[:3]:  # Show first 3
                         print(f"      {var}")
                 else:
-                    print(f"   ℹ️  No ChromaDB variables found in .env")
+                    print("   ℹ️  No ChromaDB variables found in .env")
         except Exception as e:
             print(f"   ⚠️  Could not read .env file: {e}")
     else:
-        print(f"   ℹ️  No .env file found (using defaults)")
-    
+        print("   ℹ️  No .env file found (using defaults)")
+
     return True
+
 
 def check_rag_orchestrator_connection():
     """Check RAG orchestrator location and connection"""
     print("\n4️⃣  RAG Orchestrator Connection...")
-    
+
     orchestrator_file = project_root / "src" / "sec_agent" / "rag_orchestrator.py"
     if orchestrator_file.exists():
         print(f"   ✅ Found RAG orchestrator: {orchestrator_file}")
-        
+
         try:
-            with open(orchestrator_file, 'r') as f:
+            with open(orchestrator_file) as f:
                 content = f.read()
-                if 'vector_store' in content:
-                    print(f"   ✅ RAG orchestrator uses vector_store")
-                if 'similarity_search' in content:
-                    print(f"   ✅ RAG orchestrator performs similarity_search")
+                if "vector_store" in content:
+                    print("   ✅ RAG orchestrator uses vector_store")
+                if "similarity_search" in content:
+                    print("   ✅ RAG orchestrator performs similarity_search")
         except Exception as e:
             print(f"   ⚠️  Could not read orchestrator file: {e}")
     else:
-        print(f"   ⚠️  RAG orchestrator file not found")
+        print("   ⚠️  RAG orchestrator file not found")
         return False
-    
+
     return True
+
 
 def check_test_scripts():
     """Check if test scripts exist"""
     print("\n5️⃣  Test Scripts Available...")
-    
+
     test_chromadb = project_root / "scripts" / "test_chromadb.sh"
     if test_chromadb.exists():
         print(f"   ✅ Integration test: {test_chromadb}")
-        print(f"      Run with: ./scripts/test_chromadb.sh")
-    
+        print("      Run with: ./scripts/test_chromadb.sh")
+
     test_connection = project_root / "scripts" / "test_vector_store_connection.py"
     if test_connection.exists():
         print(f"   ✅ Connection test: {test_connection}")
-        print(f"      Run with: python3 scripts/test_vector_store_connection.py")
-    
+        print("      Run with: python3 scripts/test_vector_store_connection.py")
+
     return True
+
 
 def provide_sample_query_info():
     """Provide information about sample queries"""
@@ -171,8 +181,9 @@ def provide_sample_query_info():
     print("          user_tenant='tenant_a',")
     print("          vector_store=vector_store")
     print("      )")
-    
+
     return True
+
 
 def main():
     """Main test function"""
@@ -183,7 +194,7 @@ def main():
         check_rag_orchestrator_connection()
         check_test_scripts()
         provide_sample_query_info()
-        
+
         print("\n" + "=" * 70)
         print("✅ Configuration Check Complete")
         print("=" * 70)
@@ -192,13 +203,15 @@ def main():
         print("\n🧪 To run full integration tests:")
         print("   ./scripts/test_chromadb.sh")
         print("\n✅ All checks completed!")
-        
+
         return 0
     except Exception as e:
         print(f"\n❌ Error during configuration check: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

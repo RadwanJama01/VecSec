@@ -55,10 +55,10 @@ Usage:
         validate_env_vars,
         CONFIG_SCHEMA
     )
-    
+
     # Validate configuration before use
     validate_env_vars()
-    
+
     # Initialize components
     embeddings = MockEmbeddings()
     vector_store = initialize_vector_store(embeddings)
@@ -70,10 +70,11 @@ Author: VecSec Labs
 License: For authorized security testing and research only.
 """
 
-import os
 import logging
+import os
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -82,14 +83,15 @@ load_dotenv()
 # Try to import ChromaDB for persistent storage
 try:
     from langchain_chroma import Chroma
+
     CHROMA_AVAILABLE = True
 except ImportError:
     print("⚠️  langchain-chroma not installed, using InMemory storage")
     CHROMA_AVAILABLE = False
 
-# Import Document first (needed for fallback)
-from langchain_core.documents import Document
-from langchain_core.prompts import ChatPromptTemplate
+# Import Document first (needed for fallback) - imports after try/except for ChromaDB
+from langchain_core.documents import Document  # noqa: E402
+from langchain_core.prompts import ChatPromptTemplate  # noqa: E402
 
 # Try to import InMemoryVectorStore (available in langchain-core >= 0.2.0)
 # For older versions (0.1.x), we need to use a fallback
@@ -104,18 +106,18 @@ except ImportError:
             from langchain_core.vectorstores.in_memory import InMemoryVectorStore
         except ImportError:
             # Last resort - create a simple fallback that mimics the interface
-            from typing import List
-            class InMemoryVectorStore:
+            class InMemoryVectorStoreFallback:  # type: ignore[no-redef]
                 """Fallback InMemoryVectorStore for older langchain-core versions"""
+
                 def __init__(self, embeddings):
                     self.embeddings = embeddings
-                    self.documents: List[Document] = []
-                
-                def add_documents(self, docs: List[Document]):
+                    self.documents: list[Document] = []
+
+                def add_documents(self, docs: list[Document]):
                     """Add documents to the store"""
                     self.documents.extend(docs)
-                
-                def similarity_search(self, query: str, k: int = 4) -> List[Document]:
+
+                def similarity_search(self, query: str, k: int = 4) -> list[Document]:
                     """Simple similarity search - returns first k documents"""
                     # For old versions without proper similarity, just return first k
                     return self.documents[:k]
@@ -124,43 +126,43 @@ except ImportError:
 # Configuration Schema
 # ============================================================================
 
-CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
+CONFIG_SCHEMA: dict[str, dict[str, Any]] = {
     "USE_CHROMA": {
         "type": bool,
         "required": False,
         "default": False,
-        "description": "Enable ChromaDB for persistent vector storage"
+        "description": "Enable ChromaDB for persistent vector storage",
     },
     "CHROMA_PATH": {
         "type": str,
         "required": False,
         "default": "./chroma_db",
-        "description": "Directory path for ChromaDB persistence"
+        "description": "Directory path for ChromaDB persistence",
     },
     "METRICS_PORT": {
         "type": int,
         "required": False,
         "default": 8080,
-        "description": "Port for Prometheus metrics exporter"
+        "description": "Port for Prometheus metrics exporter",
     },
     "BASETEN_MODEL_ID": {
         "type": str,
         "required": False,
         "default": None,
-        "description": "BaseTen model ID for embeddings"
+        "description": "BaseTen model ID for embeddings",
     },
     "BASETEN_API_KEY": {
         "type": str,
         "required": False,
         "default": None,
-        "description": "BaseTen API key for embeddings"
+        "description": "BaseTen API key for embeddings",
     },
     "USE_REAL_VECTOR_RETRIEVAL": {
         "type": bool,
         "required": False,
         "default": True,
-        "description": "Enable real vector store retrieval (migration flag). Set to false to use mock metadata generator."
-    }
+        "description": "Enable real vector store retrieval (migration flag). Set to false to use mock metadata generator.",
+    },
 }
 
 
@@ -168,12 +170,13 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
 # Environment Variable Validation
 # ============================================================================
 
+
 def _parse_bool(value: str) -> bool:
     """Parse boolean from string (handles 'true', 'false', '1', '0', etc.)"""
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
-        return value.lower() in ('true', '1', 'yes', 'on')
+        return value.lower() in ("true", "1", "yes", "on")
     return False
 
 
@@ -184,57 +187,57 @@ def _parse_int(value: str) -> int:
     if isinstance(value, str):
         try:
             return int(value)
-        except ValueError:
-            raise ValueError(f"Invalid integer value: '{value}'")
+        except ValueError as err:
+            raise ValueError(f"Invalid integer value: '{value}'") from err
     raise ValueError(f"Cannot convert {type(value)} to int")
 
 
 def validate_env_vars() -> None:
     """
     Validate all environment variables against CONFIG_SCHEMA.
-    
+
     Raises:
         ValueError: If any env var has invalid type or value
         FileNotFoundError: If required path doesn't exist and can't be created
     """
     errors = []
-    
+
     for var_name, schema in CONFIG_SCHEMA.items():
         env_value = os.getenv(var_name)
-        
+
         # If not set, use default (unless required)
         if env_value is None:
             if schema.get("required", False):
                 errors.append(f"Required environment variable '{var_name}' is not set")
             continue
-        
+
         # Validate type
         expected_type = schema["type"]
-        
+
         try:
-            if expected_type == bool:
+            if expected_type is bool:
                 # Validate boolean - must be 'true' or 'false'
-                if env_value.lower() not in ('true', 'false', '1', '0', 'yes', 'no', 'on', 'off'):
+                if env_value.lower() not in ("true", "false", "1", "0", "yes", "no", "on", "off"):
                     errors.append(
                         f"Invalid boolean value for '{var_name}': '{env_value}'. "
-                        f"Expected 'true' or 'false'"
+                        "Expected 'true' or 'false'"
                     )
-            elif expected_type == int:
+            elif expected_type is int:
                 # Validate integer
                 try:
                     int(env_value)
                 except ValueError:
                     errors.append(
                         f"Invalid integer value for '{var_name}': '{env_value}'. "
-                        f"Expected a valid integer"
+                        "Expected a valid integer"
                     )
-            elif expected_type == str:
+            elif expected_type is str:
                 # String validation - check if empty when required
                 if schema.get("required", False) and not env_value:
                     errors.append(f"Required string '{var_name}' cannot be empty")
         except Exception as e:
             errors.append(f"Validation error for '{var_name}': {e}")
-    
+
     # Validate CHROMA_PATH if set
     chroma_path = os.getenv("CHROMA_PATH", CONFIG_SCHEMA["CHROMA_PATH"]["default"])
     if chroma_path:
@@ -247,7 +250,7 @@ def validate_env_vars() -> None:
                 errors.append(
                     f"CHROMA_PATH '{chroma_path}' does not exist and cannot be created: {e}"
                 )
-    
+
     if errors:
         error_msg = "Configuration validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
         raise ValueError(error_msg)
@@ -257,22 +260,29 @@ def validate_env_vars() -> None:
 # Metrics Initialization (Refactored - CONFIG-003)
 # ============================================================================
 
+
 def _initialize_metrics() -> bool:
     """
     Initialize metrics exporter with centralized error handling.
-    
+
     Returns:
         bool: True if metrics enabled, False otherwise
     """
     try:
-        from src.metrics_exporter import metrics_exporter, start_metrics_exporter
-        metrics_exporter.start_server()
+        from src.metrics_exporter import (
+            metrics_exporter as metrics_exporter_instance,  # type: ignore[no-redef]
+        )
+
+        metrics_exporter_instance.start_server()
         return True
     except ImportError:
         # Fallback to same directory import
         try:
-            from metrics_exporter import metrics_exporter, start_metrics_exporter
-            metrics_exporter.start_server()
+            from metrics_exporter import (
+                metrics_exporter as metrics_exporter_instance,  # type: ignore[no-redef]
+            )
+
+            metrics_exporter_instance.start_server()
             return True
         except ImportError:
             print("⚠️  metrics_exporter not available")
@@ -293,19 +303,18 @@ METRICS_ENABLED = _initialize_metrics()
 # Logging Configuration
 # ============================================================================
 
+
 def setup_logging(
-    log_file: Optional[str] = None,
-    log_level: str = "INFO",
-    log_to_console: bool = True
+    log_file: str | None = None, log_level: str = "INFO", log_to_console: bool = True
 ) -> None:
     """
     Configure logging for the VecSec application.
-    
+
     Args:
         log_file: Path to log file (default: None, logs to console only)
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         log_to_console: Whether to also log to console (default: True)
-    
+
     Example:
         setup_logging(log_file="vecsec.log", log_level="DEBUG")
     """
@@ -315,42 +324,41 @@ def setup_logging(
         "INFO": logging.INFO,
         "WARNING": logging.WARNING,
         "ERROR": logging.ERROR,
-        "CRITICAL": logging.CRITICAL
+        "CRITICAL": logging.CRITICAL,
     }
     level = level_map.get(log_level.upper(), logging.INFO)
-    
+
     # Create formatter
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
-    
+
     # Create handlers
-    handlers = []
-    
+    handlers: list[logging.Handler] = []
+
     if log_to_console:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(level)
         console_handler.setFormatter(formatter)
         handlers.append(console_handler)
-    
+
     if log_file:
         # Ensure log directory exists
         log_path = Path(log_file)
         if log_path.parent and not log_path.parent.exists():
             log_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         handlers.append(file_handler)
-    
+
     # Configure root logger
     logging.basicConfig(
         level=level,
         handlers=handlers,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
 
 
@@ -360,14 +368,10 @@ if not logging.getLogger().handlers:
     _log_file = os.getenv("LOG_FILE")
     _log_level = os.getenv("LOG_LEVEL", "INFO")
     _log_to_console = _parse_bool(os.getenv("LOG_TO_CONSOLE", "true"))
-    
+
     # If LOG_FILE is set OR LOG_TO_CONSOLE is true, configure logging
     if _log_file or _log_to_console:
-        setup_logging(
-            log_file=_log_file,
-            log_level=_log_level,
-            log_to_console=_log_to_console
-        )
+        setup_logging(log_file=_log_file, log_level=_log_level, log_to_console=_log_to_console)
 
 
 # ============================================================================
@@ -376,8 +380,9 @@ if not logging.getLogger().handlers:
 
 # Migration flag for real vector retrieval
 USE_REAL_VECTOR_RETRIEVAL = _parse_bool(
-    os.getenv("USE_REAL_VECTOR_RETRIEVAL", 
-              str(CONFIG_SCHEMA["USE_REAL_VECTOR_RETRIEVAL"]["default"]))
+    os.getenv(
+        "USE_REAL_VECTOR_RETRIEVAL", str(CONFIG_SCHEMA["USE_REAL_VECTOR_RETRIEVAL"]["default"])
+    )
 )
 
 
@@ -385,46 +390,48 @@ USE_REAL_VECTOR_RETRIEVAL = _parse_bool(
 # Vector Store Initialization
 # ============================================================================
 
+
 def initialize_vector_store(embeddings):
     """
     Initialize vector store (ChromaDB or InMemory) based on configuration.
-    
+
     Uses CHROMA_PATH env var if set, otherwise defaults to './chroma_db'.
     Falls back to InMemoryVectorStore if ChromaDB is unavailable or fails.
-    
+
     Args:
         embeddings: Embedding function compatible with LangChain vector stores
-        
+
     Returns:
         Vector store instance (Chroma or InMemoryVectorStore)
     """
     # Check if ChromaDB should be used (CONFIG-002: Read from env var)
     use_chroma = _parse_bool(os.getenv("USE_CHROMA", str(CONFIG_SCHEMA["USE_CHROMA"]["default"])))
-    
+
     if CHROMA_AVAILABLE and use_chroma:
         try:
             # Use configurable path (CONFIG-002 fix)
-            persist_directory = os.getenv(
-                "CHROMA_PATH",
-                CONFIG_SCHEMA["CHROMA_PATH"]["default"]
-            )
-            
+            persist_directory = os.getenv("CHROMA_PATH", CONFIG_SCHEMA["CHROMA_PATH"]["default"])
+
             # Ensure directory exists or can be created
             path = Path(persist_directory)
             if not path.exists():
                 path.mkdir(parents=True, exist_ok=True)
-            
+
             vector_store = Chroma(
                 collection_name="vecsec_documents",
                 embedding_function=embeddings,
-                persist_directory=persist_directory
+                persist_directory=persist_directory,
             )
             print(f"✅ Using ChromaDB for persistent vector storage at: {persist_directory}")
             return vector_store
         except Exception as e:
             print(f"⚠️  ChromaDB initialization failed: {e}, using InMemory")
+            if "InMemoryVectorStoreFallback" in globals():
+                return InMemoryVectorStoreFallback(embeddings)  # type: ignore[call-overload]
             return InMemoryVectorStore(embeddings)
     else:
+        if "InMemoryVectorStoreFallback" in globals():
+            return InMemoryVectorStoreFallback(embeddings)  # type: ignore[call-overload]
         return InMemoryVectorStore(embeddings)
 
 
@@ -432,73 +439,82 @@ def initialize_vector_store(embeddings):
 # Document Loading
 # ============================================================================
 
+
 def initialize_sample_documents(vector_store) -> None:
     """
     Add sample documents to the vector store (fallback/default).
-    
+
     This is a static document loader for demo/testing purposes.
     For production, use load_documents_from_file() or load_documents_from_db().
-    
+
     Args:
         vector_store: Vector store instance to add documents to
     """
     sample_docs = [
-        Document(page_content="RAG (Retrieval-Augmented Generation) is a technique that combines information retrieval with text generation to produce more accurate and contextually relevant responses."),
-        Document(page_content="LangChain is a framework for developing applications powered by language models. It provides tools for building RAG applications."),
-        Document(page_content="Vector stores are databases that store and retrieve documents based on semantic similarity using embeddings."),
-        Document(page_content="Embeddings are dense vector representations of text that capture semantic meaning and enable similarity search.")
+        Document(
+            page_content="RAG (Retrieval-Augmented Generation) is a technique that combines information retrieval with text generation to produce more accurate and contextually relevant responses."
+        ),
+        Document(
+            page_content="LangChain is a framework for developing applications powered by language models. It provides tools for building RAG applications."
+        ),
+        Document(
+            page_content="Vector stores are databases that store and retrieve documents based on semantic similarity using embeddings."
+        ),
+        Document(
+            page_content="Embeddings are dense vector representations of text that capture semantic meaning and enable similarity search."
+        ),
     ]
     vector_store.add_documents(sample_docs)
 
 
-def load_documents_from_file(file_path: str, tenant_id: Optional[str] = None) -> List[Document]:
+def load_documents_from_file(file_path: str, tenant_id: str | None = None) -> list[Document]:
     """
     Load documents from a file (JSON, YAML, or text).
-    
+
     This function provides dynamic document loading as an alternative to
     static sample documents. Supports tenant-specific document loading.
-    
+
     Args:
         file_path: Path to document file (supports .json, .yaml, .txt)
         tenant_id: Optional tenant ID for filtering documents
-        
+
     Returns:
         List of Document objects
-        
+
     Raises:
         FileNotFoundError: If file doesn't exist
         ValueError: If file format is unsupported
-        
+
     Note: This is a placeholder for CONFIG-004. Full implementation pending.
     """
     path = Path(file_path)
-    
+
     if not path.exists():
         raise FileNotFoundError(f"Document file not found: {file_path}")
-    
+
     # TODO: Implement JSON/YAML/TXT parsing
     # For now, return empty list as placeholder
-    print(f"⚠️  load_documents_from_file() not yet implemented (CONFIG-004)")
+    print("⚠️  load_documents_from_file() not yet implemented (CONFIG-004)")
     return []
 
 
-def load_documents_from_db(query: str, tenant_id: Optional[str] = None) -> List[Document]:
+def load_documents_from_db(query: str, tenant_id: str | None = None) -> list[Document]:
     """
     Load documents from a database query.
-    
+
     This function provides database-backed document loading as an alternative to
     static sample documents. Supports tenant-specific filtering.
-    
+
     Args:
         query: Database query string or SQL
         tenant_id: Optional tenant ID for filtering documents
-        
+
     Returns:
         List of Document objects
-        
+
     Raises:
         NotImplementedError: Database loading not yet implemented
-        
+
     Note: This is a placeholder for CONFIG-004. Full implementation pending.
     """
     # TODO: Implement database query execution
@@ -513,10 +529,11 @@ def load_documents_from_db(query: str, tenant_id: Optional[str] = None) -> List[
 # RAG Prompt Template
 # ============================================================================
 
+
 def create_rag_prompt_template() -> ChatPromptTemplate:
     """
     Create RAG prompt template for consistent prompt formatting.
-    
+
     Returns:
         ChatPromptTemplate instance with context and question placeholders
     """
@@ -549,10 +566,11 @@ Answer:
 # Sample Documents with Metadata
 # ============================================================================
 
+
 def initialize_sample_documents_with_metadata(vector_store) -> None:
     """
     Add sample documents with proper metadata for tenant isolation
-    
+
     Note: ChromaDB only accepts scalar metadata values (str, int, float, bool).
     Lists are converted to comma-separated strings for storage.
     """
@@ -564,8 +582,8 @@ def initialize_sample_documents_with_metadata(vector_store) -> None:
                 "document_id": "doc-rag-001",
                 "tenant_id": "default_tenant",
                 "sensitivity": "INTERNAL",
-                "topics": ["rag", "ai", "retrieval"]  # Will be converted to string
-            }
+                "topics": ["rag", "ai", "retrieval"],  # Will be converted to string
+            },
         },
         {
             "content": "Vector stores enable semantic similarity search using embeddings.",
@@ -574,8 +592,8 @@ def initialize_sample_documents_with_metadata(vector_store) -> None:
                 "document_id": "doc-vec-001",
                 "tenant_id": "default_tenant",
                 "sensitivity": "PUBLIC",
-                "topics": ["vectors", "embeddings", "search"]  # Will be converted to string
-            }
+                "topics": ["vectors", "embeddings", "search"],  # Will be converted to string
+            },
         },
         # Add more documents with different tenants for testing
         {
@@ -585,25 +603,26 @@ def initialize_sample_documents_with_metadata(vector_store) -> None:
                 "document_id": "doc-sec-001",
                 "tenant_id": "security_tenant",
                 "sensitivity": "CLASSIFIED",
-                "topics": ["security", "classified"]  # Will be converted to string
-            }
-        }
+                "topics": ["security", "classified"],  # Will be converted to string
+            },
+        },
     ]
-    
+
     # Convert metadata to ChromaDB-compatible format (lists -> comma-separated strings)
     chromadb_metadatas = []
     for doc in documents:
-        metadata = doc["metadata"].copy()
+        metadata = dict(doc["metadata"])  # Convert to dict to avoid Collection.copy() issue
         # Convert list values to comma-separated strings for ChromaDB
         for key, value in metadata.items():
             if isinstance(value, list):
-                metadata[key] = ",".join(str(v) for v in value)  # Convert list to comma-separated string
+                metadata[key] = ",".join(
+                    str(v) for v in value
+                )  # Convert list to comma-separated string
             elif not isinstance(value, (str, int, float, bool)):
                 metadata[key] = str(value)  # Convert other non-scalar types to string
         chromadb_metadatas.append(metadata)
-    
+
     # Add to ChromaDB
     vector_store.add_texts(
-        texts=[doc["content"] for doc in documents],
-        metadatas=chromadb_metadatas
+        texts=[doc["content"] for doc in documents], metadatas=chromadb_metadatas
     )

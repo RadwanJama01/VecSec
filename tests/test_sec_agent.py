@@ -5,10 +5,10 @@ Unit tests for Sec_Agent.py
 Tests for security enforcement, RLS, and threat detection
 """
 
-import unittest
-import sys
 import os
-from unittest.mock import Mock, patch, MagicMock
+import sys
+import unittest
+from unittest.mock import patch
 
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -19,7 +19,6 @@ class TestSecAgentRLS(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures"""
         # Import here to avoid issues with module initialization
-        from Sec_Agent import rlsa_guard_comprehensive, ROLE_POLICIES
         
         self.user_context_guest = {
             "user_id": "test_user",
@@ -147,8 +146,12 @@ class TestSecAgentRLS(unittest.TestCase):
             retrieval_metadata
         )
         
-        # Should allow legitimate query
-        self.assertEqual(result, True)
+        # Should allow legitimate query - now returns dict with "allowed": True
+        if isinstance(result, dict):
+            self.assertTrue(result.get("allowed", False))
+        else:
+            # Backward compatibility: True means allowed
+            self.assertTrue(result is True)
 
 
 class TestEmbeddingClient(unittest.TestCase):
@@ -169,17 +172,12 @@ class TestEmbeddingClient(unittest.TestCase):
         os.environ.clear()
         os.environ.update(self.old_env)
     
-    @patch('src.Sec_Agent.os.getenv')
-    def test_raises_error_when_api_not_configured(self, mock_getenv):
-        """Test that get_embedding raises error when BaseTen not configured"""
-        mock_getenv.return_value = None
+    def test_raises_error_when_api_not_configured(self):
+        """Test that get_embedding raises error when embedding client not enabled"""
+        from src.Sec_Agent import QwenEmbeddingClient
         
-        # Need to reload module to get fresh instance
-        import importlib
-        import src.Sec_Agent as sec_agent
-        importlib.reload(sec_agent)
-        
-        client = sec_agent.QwenEmbeddingClient()
+        # Create a client and disable it (simulating not configured)
+        client = QwenEmbeddingClient()
         client.enabled = False
         
         # Should raise ValueError when trying to get embedding
@@ -189,14 +187,12 @@ class TestEmbeddingClient(unittest.TestCase):
     def test_cache_works(self):
         """Test that embedding cache works correctly"""
         from src.Sec_Agent import QwenEmbeddingClient
-        import numpy as np
         
         # Mock a client with caching
         client = QwenEmbeddingClient()
         client.enabled = False  # Will use fallback
         
         # First call - should be in cache
-        text1 = "test query"
         # Since enabled=False, it will raise ValueError per new logic
         # But let's test cache mechanism if it was enabled
         pass  # Cache test would need mock embeddings

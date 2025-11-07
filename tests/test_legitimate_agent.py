@@ -5,18 +5,18 @@ Unit tests for Legitimate_Agent.py
 Tests for legitimate query generation and false positive testing
 """
 
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from Legitimate_Agent import (
-    generate_legitimate_operation,
-    generate_legitimate_batch,
+    LEGITIMATE_OPERATIONS,
     ROLE_CLEARANCE_MAPPING,
-    LEGITIMATE_OPERATIONS
+    generate_legitimate_batch,
+    generate_legitimate_operation,
 )
 
 
