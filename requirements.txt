@@ -20,6 +20,11 @@ sentence-transformers>=2.2.0
 # Metrics and monitoring
 prometheus-client>=0.21.0
 
-# Testing (optional but recommended for running tests)
-# pytest>=7.0.0  # Uncomment if using pytest for tests
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0  # Coverage reporting
+
+# Code quality
+ruff>=0.1.0  # Fast Python linter
+mypy>=1.5.0  # Static type checker
 

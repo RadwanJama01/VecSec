@@ -268,7 +268,7 @@ except (TypeError, AttributeError) as e:
         )
         
         # Try adding documents again (using converted metadatas)
-        vector_store.add_texts(
+vector_store.add_texts(
             texts=[doc["text"] for doc in test_docs_multi_tenant],
             metadatas=chromadb_metadatas
         )

@@ -269,6 +269,97 @@ python3 src/Good_Vs_Evil.py --test-type all --role analyst
 python3 src/test_clearance_enforcement.py
 ```
 
+## 🔄 Continuous Integration
+
+VecSec uses GitHub Actions for automated quality gates on every pull request and push to main.
+
+### CI Pipeline Structure
+
+The CI pipeline (`.github/workflows/ci.yml`) runs three jobs in parallel:
+
+1. **Lint & Type Check** (`lint`)
+   - Runs `ruff` for fast linting and formatting checks
+   - Runs `mypy` for static type checking
+   - Fast feedback (< 2 minutes)
+
+2. **Unit Tests** (`unit-tests`)
+   - Runs pytest with coverage reporting
+   - Uses mock retrieval (`USE_REAL_VECTOR_RETRIEVAL=false`)
+   - Tests all unit tests in `src/sec_agent/tests/`
+   - Generates coverage reports
+
+3. **Integration Smoke Tests** (`integration-smoke`)
+   - Runs on main branch and PRs
+   - Uses real vector retrieval (`USE_REAL_VECTOR_RETRIEVAL=true`)
+   - Tests migration and integration scenarios
+   - Uses ChromaDB for real vector store testing
+
+### Running Tests Locally
+
+#### Mock Retrieval (Unit Tests)
+```bash
+# Run unit tests with mock retrieval (fast)
+export USE_REAL_VECTOR_RETRIEVAL=false
+pytest src/sec_agent/tests/ --maxfail=1 --disable-warnings --cov=src/sec_agent -v
+```
+
+#### Real Retrieval (Integration Tests)
+```bash
+# Run integration tests with real vector store (ChromaDB)
+export USE_REAL_VECTOR_RETRIEVAL=true
+export USE_CHROMA=true  # Use ChromaDB for real vector store testing
+export CHROMA_PATH=./chroma_db_test  # Optional: separate test database
+pytest src/sec_agent/tests/test_rag_orchestrator_migration.py -v
+pytest src/sec_agent/tests/test_metadata_generator_real.py -v
+```
+
+#### All Tests
+```bash
+# Run all tests (unit + integration)
+pytest src/sec_agent/tests/ -v
+```
+
+### Adding New CI Jobs
+
+To add a new job to the CI pipeline:
+
+1. Edit `.github/workflows/ci.yml`
+2. Add a new job under the `jobs:` section
+3. Use the same Python setup pattern:
+   ```yaml
+   new-job:
+     name: New Job Name
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+       - uses: actions/setup-python@v5
+         with:
+           python-version: '3.11'
+       - run: pip install -r requirements.txt
+       - run: # Your test command
+   ```
+4. Add the job to `test-summary` job's `needs:` list
+
+### CI Requirements
+
+**All pull requests must pass CI before merging:**
+- ✅ Lint checks must pass (no ruff errors)
+- ✅ Type checks must pass (mypy warnings are non-blocking)
+- ✅ All unit tests must pass
+- ✅ Integration smoke tests must pass (on main branch)
+
+### Security Scanning
+
+- **CodeQL**: Automated security scanning runs weekly and on every push to main
+- **Dependabot**: Weekly dependency update PRs for pip packages
+- See `.github/workflows/codeql.yml` and `.github/dependabot.yml`
+
+### CI Performance
+
+- **Target**: < 7 minutes total
+- **Caching**: Pip dependencies are cached
+- **Concurrency**: Stale runs are automatically cancelled
+
 ## 📊 Attack Types
 
 1. **Prompt Injection**: Override system instructions
