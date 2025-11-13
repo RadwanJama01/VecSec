@@ -154,6 +154,84 @@
             "max": 100
           }
         }
+      },
+      {
+        "id": 12,
+        "title": "Vector Retrieval Success Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(vecsec_vector_retrieval_success_total[5m]) / (rate(vecsec_vector_retrieval_success_total[5m]) + rate(vecsec_vector_retrieval_failures_total[5m])) * 100",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"x": 18, "y": 20, "w": 6, "h": 4},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "max": 100
+          }
+        }
+      },
+      {
+        "id": 13,
+        "title": "Real Vector Retrievals Over Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(vecsec_vector_retrieval_success_total[5m])",
+            "legendFormat": "Successful Retrievals",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(vecsec_vector_retrieval_failures_total[5m])",
+            "legendFormat": "Failed Retrievals",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8}
+      },
+      {
+        "id": 14,
+        "title": "Vector Retrieval Latency (p95)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, vecsec_vector_retrieval_duration_seconds_bucket)",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"x": 12, "y": 24, "w": 6, "h": 4},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 15,
+        "title": "Vector Store Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=\"vecsec-vector-store\"}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"x": 18, "y": 24, "w": 6, "h": 4},
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "type": "value",
+                "options": {
+                  "1": {"text": "UP", "color": "green"},
+                  "0": {"text": "DOWN", "color": "red"}
+                }
+              }
+            ]
+          }
+        }
       }
     ]
   }

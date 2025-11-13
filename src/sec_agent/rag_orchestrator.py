@@ -151,7 +151,11 @@ class RAGOrchestrator:
         # Track metrics
         if METRICS_ENABLED and metrics_exporter_instance:
             duration = time.time() - start_time
-            is_blocked = decision is not True
+            # Check if decision is allowed: either True (boolean) or dict with "allowed": True
+            is_allowed = decision is True or (
+                isinstance(decision, dict) and decision.get("allowed") is True
+            )
+            is_blocked = not is_allowed
             has_threat = bool(query_context.get("detected_threats"))
 
             # Track request and performance
@@ -172,7 +176,32 @@ class RAGOrchestrator:
             else:
                 metrics_exporter_instance.track_file_processed("approved")
 
-        if decision is not True:
+        # Check if decision is blocked
+        # Decision can be:
+        # - True (boolean) -> allowed
+        # - False (boolean) -> blocked
+        # - dict with "allowed": True -> allowed
+        # - dict with "allowed": False or "status": "DENIED" or "violations" -> blocked
+        if decision is True:
+            # Explicitly allowed (boolean True)
+            is_blocked = False
+        elif isinstance(decision, dict):
+            # Check dict-based decision
+            allowed = decision.get("allowed")
+            status = decision.get("status")
+            has_violations = "violations" in decision and decision.get("violations")
+
+            # Blocked if explicitly denied or has violations
+            is_blocked = (
+                allowed is False
+                or status == "DENIED"
+                or (has_violations and len(decision.get("violations", [])) > 0)
+            )
+        else:
+            # Default to blocked for any other type (including False)
+            is_blocked = True
+
+        if is_blocked:
             # Add success field to denial response
             decision["success"] = False
             decision["user_context"] = user_context
