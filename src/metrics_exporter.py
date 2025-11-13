@@ -60,7 +60,7 @@ patterns_learned = Counter(
     "vecsec_patterns_learned_total", "Threat patterns learned", ["pattern_type"]
 )
 embeddings_generated = Counter("vecsec_embedding_generation_total", "Embeddings generated")
-model_updates = Counter("vecsec_model_updates_total", "Model update events")
+model_updates = Counter("vecsec_model_updates_total", "Model update events", ["status"])
 
 # Request & Performance Metrics
 request_total = Counter("vecsec_requests_total", "Total requests processed", ["status"])

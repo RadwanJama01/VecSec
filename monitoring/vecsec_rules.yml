@@ -69,6 +69,34 @@ groups:
           summary: "No new threat patterns learned"
           description: "System may need testing data"
 
+      # Vector Retrieval Monitoring
+      - alert: VectorRetrievalFailure
+        expr: rate(vecsec_vector_retrieval_failures_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Vector retrieval failure rate is high: {{ $value | humanizePercentage }}"
+          description: "Real vector retrieval is failing frequently. Check vector store connectivity and fallback to mock if needed."
+
+      - alert: VectorRetrievalTimeout
+        expr: histogram_quantile(0.95, vecsec_vector_retrieval_duration_seconds_bucket) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Vector retrieval latency high (p95: {{ $value }}s)"
+          description: "Vector store queries are taking too long. Performance may be degraded."
+
+      - alert: VectorStoreDown
+        expr: up{job="vecsec-vector-store"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Vector store is down"
+          description: "Vector store connection lost. System may fall back to mock retrieval."
+
       # Infrastructure Monitoring
       - alert: PrometheusDown
         expr: up{job="prometheus"} == 0
