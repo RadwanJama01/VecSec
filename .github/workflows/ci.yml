@@ -68,12 +68,15 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-      
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          # Install a CPU-only torch wheel first
+          pip install "torch==2.5.1+cpu" --index-url https://download.pytorch.org/whl/cpu
+          # Then install the rest
           pip install -r requirements.txt
-      
+          echo "✅ Dependencies installed successfully!"      
       - name: Run unit tests
         env:
           USE_REAL_VECTOR_RETRIEVAL: 'false'  # Use mock for unit tests
