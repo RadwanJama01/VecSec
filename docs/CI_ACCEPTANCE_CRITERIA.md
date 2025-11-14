@@ -22,18 +22,18 @@ on:
 - **Ruff formatting**: Lines 40-42
 - **mypy type checking**: Lines 44-47
 
-#### ✅ Pytest unit tests (default: mock retrieval)
+#### ✅ Pytest unit tests
 **Evidence**: `.github/workflows/ci.yml` lines 49-96
-- Uses `USE_REAL_VECTOR_RETRIEVAL: 'false'` (line 79)
 - Runs `pytest src/sec_agent/tests/` with coverage
 - Uses `--maxfail=1` and `--disable-warnings` as specified
+- Tests use mocked vector stores for fast execution
 
-#### ✅ Integration smoke test (on `main` only) using real retrieval + vector store
+#### ✅ Integration smoke test (on `main` only) using real vector store
 **Evidence**: `.github/workflows/ci.yml` lines 98-148
 - Condition: `if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'` (line 103)
-- Uses `USE_REAL_VECTOR_RETRIEVAL: 'true'` (line 130)
-- Uses `USE_CHROMA: 'true'` for ChromaDB (line 131)
-- Uses real vector store secrets via ChromaDB
+- Uses `USE_CHROMA: 'true'` for ChromaDB (line 132)
+- Uses `CHROMA_PATH: './chroma_db_ci'` for CI-specific path (line 133)
+- Tests real vector store integration with ChromaDB
 
 #### ✅ Uses caching to reduce runtime
 **Evidence**: `.github/workflows/ci.yml`
@@ -77,7 +77,7 @@ concurrency:
 **Evidence**: `README.md` lines 272-360
 - Section title: "🔄 Continuous Integration" (line 272)
 - Describes what the pipeline runs (lines 276-295)
-- Explains how to test locally (mock vs. real retrieval) (lines 297-319)
+- Explains how to test locally (unit tests vs. integration tests) (lines 297-319)
 - Shows how to add new CI jobs (lines 321-340)
 - Lists CI requirements (lines 342-348)
 - Documents security scanning (lines 350-354)
@@ -89,8 +89,8 @@ concurrency:
 |-------------------|--------|-------------------|
 | Runs on PRs and main | ✅ | `.github/workflows/ci.yml:3-7` |
 | Ruff + mypy included | ✅ | `.github/workflows/ci.yml:36-47` |
-| Pytest unit tests (mock) | ✅ | `.github/workflows/ci.yml:77-88` |
-| Integration smoke (main only, real) | ✅ | `.github/workflows/ci.yml:98-148` |
+| Pytest unit tests | ✅ | `.github/workflows/ci.yml:80-90` |
+| Integration smoke (main only, real vector store) | ✅ | `.github/workflows/ci.yml:130-146` |
 | Uses caching | ✅ | `.github/workflows/ci.yml:28,64-70,115-121` |
 | Cancels stale runs | ✅ | `.github/workflows/ci.yml:9-12` |
 | Runs < 7 minutes | ✅ | Timeouts set appropriately |

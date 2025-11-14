@@ -129,6 +129,57 @@ The system tracks test results and failures for analysis:
 
 ## 🏗️ Architecture
 
+### System Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         VecSec System                                 │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                       │
+┌───────▼────────┐   ┌────────▼────────┐   ┌────────▼────────┐
+│  User Query   │   │  Attack Agent   │   │  Test Framework  │
+│  (Sec_Agent)  │   │  (Evil_Agent)    │   │  (Good_Vs_Evil)  │
+└───────┬────────┘   └────────┬────────┘   └────────┬────────┘
+        │                     │                       │
+        └─────────────────────┼─────────────────────┘
+                              │
+                    ┌─────────▼─────────┐
+                    │  RAG Orchestrator  │
+                    │  (rag_orchestrator)│
+                    └─────────┬─────────┘
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                       │
+┌───────▼────────┐   ┌────────▼────────┐   ┌────────▼────────┐
+│ Query Parser   │   │  Metadata Gen   │   │  RLS Enforcer    │
+│ (extract ctx)  │   │  (vector search) │   │  (policy checks) │
+└────────────────┘   └────────┬────────┘   └────────┬────────┘
+                              │                       │
+                    ┌─────────▼─────────┐   ┌────────▼────────┐
+                    │  Vector Store     │   │  Policy Manager │
+                    │  (ChromaDB/       │   │  (tenant/role)  │
+                    │   InMemory)       │   └─────────────────┘
+                    └─────────┬─────────┘
+                              │
+                    ┌─────────▼─────────┐
+                    │  Embeddings      │
+                    │  (SentenceTrans)  │
+                    └──────────────────┘
+```
+
+### Component Flow
+
+1. **Query Input**: User query enters through `Sec_Agent.py` or test framework
+2. **Query Parsing**: `query_parser.py` extracts intent, topics, and context
+3. **Vector Retrieval**: `metadata_generator.py` performs similarity search on vector store
+4. **RLS Enforcement**: `rls_enforcer.py` checks policies against retrieved metadata
+5. **Threat Detection**: `threat_detector.py` identifies malicious patterns
+6. **Response**: Allowed queries proceed to RAG generation; blocked queries return denial
+
+### File Structure
+
 ```
 VecSec/
 ├── src/                     # 🐍 Core Python Files
@@ -284,14 +335,14 @@ The CI pipeline (`.github/workflows/ci.yml`) runs three jobs in parallel:
 
 2. **Unit Tests** (`unit-tests`)
    - Runs pytest with coverage reporting
-   - Uses mock retrieval (`USE_REAL_VECTOR_RETRIEVAL=false`)
+   - Tests use mocked vector stores for fast execution
    - Tests all unit tests in `src/sec_agent/tests/`
    - Generates coverage reports
 
 3. **Integration Smoke Tests** (`integration-smoke`)
    - Runs on main branch and PRs
-   - Uses real vector retrieval (`USE_REAL_VECTOR_RETRIEVAL=true`)
-   - Tests migration and integration scenarios
+   - Uses real ChromaDB vector store (`USE_CHROMA=true`)
+   - Tests integration scenarios with real vector store
    - Uses ChromaDB for real vector store testing
 
 ### Running Tests Locally
@@ -318,7 +369,6 @@ mypy . --ignore-missing-imports --no-strict-optional
 
 **2. Unit Tests (matches CI unit-tests job)**
 ```bash
-export USE_REAL_VECTOR_RETRIEVAL=false
 export LOG_LEVEL=WARNING
 pytest src/sec_agent/tests/ \
   --maxfail=1 \
@@ -330,11 +380,10 @@ pytest src/sec_agent/tests/ \
 
 **3. Integration Smoke Tests (matches CI integration-smoke job)**
 ```bash
-export USE_REAL_VECTOR_RETRIEVAL=true
 export USE_CHROMA=true
 export CHROMA_PATH=./chroma_db_ci
-pytest src/sec_agent/tests/test_rag_orchestrator_migration.py \
-  src/sec_agent/tests/test_metadata_generator_real.py \
+pytest src/sec_agent/tests/test_rag_orchestrator.py \
+  src/sec_agent/tests/test_metadata_generator.py \
   -v
 ```
 
@@ -414,6 +463,89 @@ CHROMA_HOST=chromadb.net
 1. **InMemory (Default)**: Fast, no persistence
 2. **ChromaDB (Persistent)**: Local storage in `./chroma_db/`
 3. **ChromaDB Cloud**: Cloud-hosted with API key
+
+## 🗄️ Vector Store Setup
+
+VecSec uses a vector store for document retrieval and RLS enforcement. The system supports ChromaDB for persistent storage with automatic fallback to in-memory storage.
+
+### Quick Setup
+
+```bash
+# Enable ChromaDB persistence
+export USE_CHROMA=true
+export CHROMA_PATH=./chroma_db
+
+# Or add to .env file
+echo "USE_CHROMA=true" >> .env
+echo "CHROMA_PATH=./chroma_db" >> .env
+```
+
+### Initialization
+
+The vector store is initialized automatically when using the RAG orchestrator:
+
+```python
+from src.sec_agent.config import initialize_vector_store, initialize_sample_documents
+from src.sec_agent.mock_llm import MockEmbeddings
+
+# Initialize vector store
+embeddings = MockEmbeddings()
+vector_store = initialize_vector_store(embeddings)
+
+# Load sample documents
+initialize_sample_documents(vector_store)
+```
+
+### Vector Store Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              Vector Store Layer                          │
+├─────────────────────────────────────────────────────────┤
+│                                                           │
+│  ┌──────────────┐         ┌──────────────┐              │
+│  │  ChromaDB    │         │ InMemory     │              │
+│  │  (Persistent)│◄───────►│ (Fallback)   │              │
+│  └──────┬───────┘         └──────┬───────┘              │
+│         │                         │                       │
+│         └──────────┬──────────────┘                       │
+│                    │                                      │
+│         ┌──────────▼──────────┐                           │
+│         │  Document Storage   │                           │
+│         │  - Embeddings       │                           │
+│         │  - Metadata         │                           │
+│         │  - Tenant IDs       │                           │
+│         └──────────┬──────────┘                           │
+│                    │                                      │
+│         ┌──────────▼──────────┐                           │
+│         │  Similarity Search  │                           │
+│         │  - Query embedding   │                           │
+│         │  - Tenant filtering │                           │
+│         │  - Top-K retrieval  │                           │
+│         └────────────────────┘                           │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Document Metadata Structure
+
+Documents stored in the vector store include the following metadata:
+
+- `embedding_id`: Unique identifier for the embedding
+- `document_id`: Unique identifier for the document
+- `tenant_id`: Tenant identifier for multi-tenant isolation
+- `sensitivity`: Clearance level (PUBLIC, INTERNAL, CONFIDENTIAL, SECRET)
+- `topics`: Comma-separated list of topics (stored as string, converted to list on retrieval)
+
+### Retrieval Process
+
+1. **Query Processing**: User query is converted to embedding
+2. **Similarity Search**: Vector store performs similarity search with tenant filtering
+3. **Metadata Extraction**: Document metadata is extracted for RLS enforcement
+4. **RLS Checks**: Metadata is used to enforce tenant isolation and clearance levels
+
+### Configuration
+
+See `docs/VECTOR_STORE_CONFIG.md` for detailed configuration options and troubleshooting.
 
 ### Customize Policies
 Edit `src/Sec_Agent.py`:

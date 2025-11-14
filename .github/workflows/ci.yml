@@ -79,7 +79,6 @@ jobs:
           echo "✅ Dependencies installed successfully!"      
       - name: Run unit tests
         env:
-          USE_REAL_VECTOR_RETRIEVAL: 'false'  # Use mock for unit tests
           LOG_LEVEL: 'WARNING'  # Reduce log noise
         run: |
           pytest src/sec_agent/tests/ \
@@ -128,20 +127,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
-      - name: Run integration tests with real retrieval
+      - name: Run integration tests with real vector store
         env:
-          USE_REAL_VECTOR_RETRIEVAL: 'true'
           USE_CHROMA: 'true'  # Use ChromaDB for integration tests (real vector store)
           CHROMA_PATH: './chroma_db_ci'  # Separate path for CI to avoid conflicts
           LOG_LEVEL: 'INFO'
         run: |
-          # Run migration tests (includes integration tests)
+          # Run orchestrator tests (includes integration tests)
           pytest src/sec_agent/tests/test_rag_orchestrator_migration.py \
             --maxfail=1 \
             --disable-warnings \
             -v
           
-          # Run metadata generator real tests
+          # Run metadata generator tests
           pytest src/sec_agent/tests/test_metadata_generator_real.py \
             --maxfail=1 \
             --disable-warnings \

@@ -5,7 +5,7 @@
 **Report Date:** [YYYY-MM-DD]  
 **Environment:** [Staging/Production]  
 **Reporting Period:** [Start Date] to [End Date]  
-**Feature Flag:** `USE_REAL_VECTOR_RETRIEVAL=[true/false]`
+**Vector Store:** [ChromaDB/InMemoryVectorStore]
 
 ### Key Findings
 - ✅ / ❌ Performance metrics within SLA
@@ -64,8 +64,9 @@
 | Failure rate | < 1% | X.XX% | ✅ PASS / ❌ FAIL |
 
 **Retrieval Method:**
-- Real retrieval: XX% of requests
-- Mock retrieval: XX% of requests (fallback)
+- Vector store retrieval: 100% of requests
+- Vector store type: [ChromaDB/InMemoryVectorStore]
+- Note: All requests use real vector store retrieval (no mock fallback)
 
 ### Threat Detection Performance
 

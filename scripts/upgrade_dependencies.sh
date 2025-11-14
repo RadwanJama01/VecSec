@@ -73,7 +73,7 @@ PYEOF
 if [ $? -eq 0 ]; then
     echo ""
     echo "🎉 Upgrade successful! You can now run:"
-    echo "   python3 src/sec_agent/tests/test_rag_orchestrator_migration.py"
+    echo "   python3 src/sec_agent/tests/test_rag_orchestrator.py"
 else
     echo ""
     echo "❌ Verification failed. Please check the errors above."

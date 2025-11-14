@@ -8,7 +8,7 @@
 # - Full stack integration with actual vector store
 #
 # For unit tests and fast CI/CD, use instead:
-#   python3 src/sec_agent/tests/test_metadata_generator_real.py
+#   python3 src/sec_agent/tests/test_metadata_generator.py
 #
 # Usage: ./scripts/test_chromadb.sh
 
@@ -124,7 +124,7 @@ if "Chroma" not in vector_store_type:
 # Note: Documents will be added in the comprehensive test suite below
 
 # ============================================================================
-# COMPREHENSIVE TEST SUITE FOR generate_retrieval_metadata_real
+# COMPREHENSIVE TEST SUITE FOR generate_retrieval_metadata
 # Tests all 5 goals:
 # 1. Connects to real vector store
 # 2. Performs actual similarity search
@@ -162,7 +162,7 @@ sys.modules['sec_agent.metadata_generator'] = metadata_module
 metadata_module.__package__ = 'sec_agent'
 metadata_module.__name__ = 'sec_agent.metadata_generator'
 spec.loader.exec_module(metadata_module)
-generate_retrieval_metadata_real = metadata_module.generate_retrieval_metadata_real
+generate_retrieval_metadata = metadata_module.generate_retrieval_metadata
 
 # ============================================================================
 # TEST 1: Add documents with proper metadata for multiple tenants
@@ -300,7 +300,7 @@ try:
     print(f"      Query: '{query_context['query']}'")
     print(f"      Tenant filter: 'tenant_a'")
     
-    metadata_results = generate_retrieval_metadata_real(
+    metadata_results = generate_retrieval_metadata(
         query_context=query_context,
         user_tenant="tenant_a",
         vector_store=vector_store
@@ -400,7 +400,7 @@ try:
     print(f"\n   🔍 TENANT A SEARCH:")
     print(f"      Query: 'security'")
     print(f"      Filter: tenant_id='tenant_a'")
-    results_tenant_a = generate_retrieval_metadata_real(
+    results_tenant_a = generate_retrieval_metadata(
         query_context={"query": "security"},
         user_tenant="tenant_a",
         vector_store=vector_store
@@ -425,7 +425,7 @@ try:
     print(f"\n   🔍 TENANT B SEARCH:")
     print(f"      Query: 'security'")
     print(f"      Filter: tenant_id='tenant_b'")
-    results_tenant_b = generate_retrieval_metadata_real(
+    results_tenant_b = generate_retrieval_metadata(
         query_context={"query": "security"},
         user_tenant="tenant_b",
         vector_store=vector_store
@@ -469,7 +469,7 @@ print("   Goal: Handles errors gracefully")
 print("   Test 5a: Handling None/invalid vector_store...")
 try:
     # This should fail gracefully or raise a clear error
-    result = generate_retrieval_metadata_real(
+    result = generate_retrieval_metadata(
         query_context={"query": "test"},
         user_tenant="tenant_a",
         vector_store=None
@@ -485,7 +485,7 @@ except Exception as e:
 # Test 5b: Empty query
 print("   Test 5b: Handling empty query...")
 try:
-    result = generate_retrieval_metadata_real(
+    result = generate_retrieval_metadata(
         query_context={"query": "", "topics": ["security"]},
         user_tenant="tenant_a",
         vector_store=vector_store
@@ -501,7 +501,7 @@ except Exception as e:
 # Test 5c: Non-existent tenant
 print("   Test 5c: Handling non-existent tenant...")
 try:
-    result = generate_retrieval_metadata_real(
+    result = generate_retrieval_metadata(
         query_context={"query": "test"},
         user_tenant="nonexistent_tenant",
         vector_store=vector_store
@@ -515,7 +515,7 @@ except Exception as e:
 print("   Test 5d: Handling potential vector store errors...")
 try:
     # This should work - if vector store fails, function should catch and fallback
-    result = generate_retrieval_metadata_real(
+    result = generate_retrieval_metadata(
         query_context={"query": "test query"},
         user_tenant="tenant_a",
         vector_store=vector_store
@@ -525,7 +525,7 @@ except Exception as e:
     print(f"   ⚠️  Vector store error occurred: {e}")
     # Check if it falls back to mock
     try:
-        result = generate_retrieval_metadata_real(
+        result = generate_retrieval_metadata(
             query_context={"query": "test"},
             user_tenant="tenant_a",
             vector_store=vector_store
@@ -570,7 +570,7 @@ try:
     log_capture.truncate(0)
     
     # Run the function
-    result = generate_retrieval_metadata_real(
+    result = generate_retrieval_metadata(
         query_context=test_query,
         user_tenant="tenant_a",
         vector_store=vector_store
@@ -630,6 +630,6 @@ print("✅ Goal 3: Returns real document IDs and content - VERIFIED")
 print("✅ Goal 4: Implements proper tenant filtering - VERIFIED")
 print("✅ Goal 5: Handles errors gracefully - VERIFIED")
 print("✅ Goal 6: Includes proper logging - VERIFIED")
-print("\n🎉 All tests passed! generate_retrieval_metadata_real meets all goals!")
+print("\n🎉 All tests passed! generate_retrieval_metadata meets all goals!")
 print("="*70)
 PYCODE

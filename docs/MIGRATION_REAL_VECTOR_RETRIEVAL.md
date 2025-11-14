@@ -1,12 +1,16 @@
 # Migration: Real Vector Retrieval Integration
 
+> **⚠️ HISTORICAL DOCUMENT**  
+> This document describes a completed migration that occurred in the past. The migration is **fully complete** and the feature flag has been removed. This document is kept for historical reference only.  
+> **Current Status**: All code uses real vector store retrieval. No feature flag exists. Mock function has been removed.
+
 ## Overview
 
-This document describes the migration from mock metadata generation to real vector store retrieval in the RAG Orchestrator. The migration includes feature flags, backward compatibility, logging, and comprehensive testing.
+This document describes the completed migration from mock metadata generation to real vector store retrieval in the RAG Orchestrator. **The migration is complete** - the mock function has been removed and all code now uses real vector store retrieval.
 
 ## Implementation Status
 
-✅ **All requirements completed**
+✅ **Migration Complete** - Mock function removed, all code uses real vector retrieval
 
 ### 1. Orchestrator Initializes Vector Store Connection ✅
 
@@ -25,63 +29,62 @@ The vector store is initialized in:
 - `src/Sec_Agent.py` (line 33)
 - Any code that creates `RAGOrchestrator` instances
 
-### 2. Calls New `generate_retrieval_metadata_real()` ✅
+### 2. Uses `generate_retrieval_metadata()` with Vector Store ✅
 
-**Location**: `src/sec_agent/rag_orchestrator.py` (lines 91-95)
+**Location**: `src/sec_agent/rag_orchestrator.py`
 
-The orchestrator now calls the real retrieval function when the feature flag is enabled:
+The orchestrator calls the retrieval function with the vector store:
 
 ```python
-retrieval_metadata = generate_retrieval_metadata_real(
+retrieval_metadata = generate_retrieval_metadata(
     query_context, 
     tenant_id, 
     self.vector_store
 )
 ```
 
-### 3. Feature Flag for Gradual Rollout ✅
+**Note**: The function `generate_retrieval_metadata()` now requires a `vector_store` parameter. The mock function has been completely removed.
 
-**Location**: `src/sec_agent/config.py`
+### 3. Migration Complete - Feature Flag Removed ✅
 
-**Feature Flag**: `USE_REAL_VECTOR_RETRIEVAL`
+**Status**: ✅ **COMPLETE** - The feature flag `USE_REAL_VECTOR_RETRIEVAL` has been removed from the codebase. All code now uses real vector store retrieval. The mock function has been completely removed.
 
-- **Default**: `true` (real retrieval enabled by default)
-- **Environment Variable**: `USE_REAL_VECTOR_RETRIEVAL`
-- **Config Schema**: Added to `CONFIG_SCHEMA` (line 158-163)
-- **Constant**: `USE_REAL_VECTOR_RETRIEVAL` exported from `config.py` (line 378-381)
+**Historical Implementation** (for reference - no longer applicable):
+- Feature flag was used during migration for gradual rollout (now removed)
+- Default was `true` (real retrieval enabled)
+- Environment variable: `USE_REAL_VECTOR_RETRIEVAL` (no longer exists)
+- **Constant**: `USE_REAL_VECTOR_RETRIEVAL` was exported from `config.py` (removed)
 
-**Usage**:
-```bash
-# Enable real retrieval (default)
-export USE_REAL_VECTOR_RETRIEVAL=true
-
-# Disable real retrieval (use mock)
-export USE_REAL_VECTOR_RETRIEVAL=false
-```
-
-**Implementation Logic** (`rag_orchestrator.py` lines 81-136):
-- If `USE_REAL_VECTOR_RETRIEVAL=true` AND `vector_store is not None` → Use real retrieval
-- If `USE_REAL_VECTOR_RETRIEVAL=false` → Use mock retrieval
-- If `vector_store is None` → Fallback to mock retrieval
-- If real retrieval fails → Fallback to mock retrieval
+**Current Implementation**:
+- All code always uses real vector store retrieval
+- No feature flag exists
+- If `vector_store is None` → Returns empty metadata (no fallback)
+- If retrieval fails → Returns error metadata (no fallback)
 
 ### 4. Backward Compatibility During Migration ✅
 
-**Multiple fallback mechanisms**:
+**Error Handling** (Current Implementation):
 
-1. **Feature Flag Disabled**: Uses `generate_retrieval_metadata()` (mock)
-2. **Vector Store None**: Falls back to mock metadata generator
-3. **Real Retrieval Error**: Catches exceptions and falls back to mock
-4. **API Contract**: Unchanged - `rag_with_rlsa()` signature identical
+1. **Vector Store None**: Returns empty metadata with warning log
+2. **Retrieval Error**: Returns error metadata with error log
+3. **API Contract**: Unchanged - `rag_with_rlsa()` signature identical
 
-**Code** (`rag_orchestrator.py` lines 104-115, 116-136):
+**Code** (`rag_orchestrator.py`):
 ```python
-try:
-    retrieval_metadata = generate_retrieval_metadata_real(...)
-except Exception as e:
-    # Fallback to mock on error
-    retrieval_metadata = generate_retrieval_metadata(...)
+if self.vector_store is None:
+    # Return empty metadata when vector store unavailable
+    retrieval_metadata = [{"embedding_id": "emb-empty", ...}]
+else:
+    try:
+        retrieval_metadata = generate_retrieval_metadata(
+            query_context, tenant_id, self.vector_store
+        )
+    except Exception as e:
+        # Return error metadata on failure
+        retrieval_metadata = [{"embedding_id": "emb-error", ...}]
 ```
+
+**Note**: The mock function has been completely removed. There is no fallback to mock metadata generation.
 
 ### 5. Logging for Monitoring Migration ✅
 
@@ -109,34 +112,19 @@ except Exception as e:
    )
    ```
 
-3. **Real Retrieval Fallback** (WARNING level, line 106-114):
+3. **Retrieval Error** (ERROR level):
    ```python
-   logger.warning(
-       f"Real vector retrieval failed, falling back to mock: {e}",
-       exc_info=True,
+   logger.error(
+       f"Vector retrieval failed: {e}",
+       exc_info=logger.isEnabledFor(logging.DEBUG),
        extra={
            "tenant_id": tenant_id,
-           "migration": "real_vector_retrieval_fallback",
            "error_type": type(e).__name__
        }
    )
    ```
 
-4. **Mock Retrieval (Feature Flag Disabled)** (DEBUG level, line 119-126):
-   ```python
-   logger.debug(
-       "Feature flag disabled, using mock metadata generator",
-       extra={"migration": "mock_metadata", "feature_flag": "USE_REAL_VECTOR_RETRIEVAL=false"}
-   )
-   ```
-
-5. **Mock Retrieval (Vector Store None)** (WARNING level, line 128-135):
-   ```python
-   logger.warning(
-       "Vector store is None, falling back to mock metadata generator",
-       extra={"migration": "mock_metadata_fallback", "reason": "vector_store_none"}
-   )
-   ```
+**Note**: The logging examples above (items 4-5) are historical and no longer apply. Mock fallback logging has been removed.
 
 **Structured Logging Fields**:
 - `migration`: Migration state identifier
@@ -166,43 +154,42 @@ def rag_with_rlsa(self, user_id, tenant_id, clearance, query, role="analyst"):
 
 ### Unit Tests ✅
 
-**File**: `src/sec_agent/tests/test_rag_orchestrator_migration.py`
+**File**: `src/sec_agent/tests/test_rag_orchestrator.py` (renamed from `test_rag_orchestrator_migration.py`)
 
 **Test Coverage**:
 
-1. ✅ `test_feature_flag_defaults_to_true` - Verifies default is True
-2. ✅ `test_feature_flag_respects_env_var` - Verifies env var parsing
-3. ✅ `test_uses_real_retrieval_when_flag_enabled` - Real retrieval path
-4. ✅ `test_uses_mock_retrieval_when_flag_disabled` - Mock retrieval path
-5. ✅ `test_falls_back_to_mock_on_real_retrieval_error` - Error handling
-6. ✅ `test_falls_back_to_mock_when_vector_store_none` - None handling
-7. ✅ `test_logs_migration_info_when_using_real_retrieval` - Logging verification
-8. ✅ `test_logs_migration_info_when_using_mock_retrieval` - Logging verification
-9. ✅ `test_api_contract_unchanged` - API contract preservation
-10. ✅ `test_passes_vector_store_to_real_retrieval` - Parameter passing
+1. ✅ `test_uses_vector_store_retrieval` - Vector store retrieval path
+2. ✅ `test_handles_vector_store_error` - Error handling
+3. ✅ `test_handles_none_vector_store` - None handling
+4. ✅ `test_logs_retrieval_info` - Logging verification
+5. ✅ `test_api_contract_unchanged` - API contract preservation
+
+**Note**: Feature flag tests have been removed as the flag no longer exists.
 
 ### Integration Tests ✅
 
-**File**: `src/sec_agent/tests/test_rag_orchestrator_migration.py`
+**File**: `src/sec_agent/tests/test_rag_orchestrator.py`
 
 **Test Coverage**:
 
 1. ✅ `test_integration_real_retrieval_with_inmemory_store` - Real vector store integration
-2. ✅ `test_integration_backward_compatibility_mock_fallback` - Backward compatibility
+2. ✅ `test_integration_handles_none_vector_store` - None vector store handling
 
 ## Migration Checklist
 
-- [x] Feature flag added to config schema
-- [x] Feature flag constant exported from config
-- [x] Orchestrator checks feature flag
+- [x] Feature flag added to config schema (removed after migration)
+- [x] Feature flag constant exported from config (removed after migration)
+- [x] Orchestrator checks feature flag (removed after migration)
 - [x] Real retrieval function called when enabled
-- [x] Fallback to mock when flag disabled
-- [x] Fallback to mock when vector_store is None
-- [x] Fallback to mock on real retrieval errors
+- [x] Fallback to mock when flag disabled (removed - no fallback)
+- [x] Fallback to mock when vector_store is None (removed - returns empty metadata)
+- [x] Fallback to mock on real retrieval errors (removed - returns error metadata)
 - [x] Migration logging implemented
 - [x] API contract preserved
 - [x] Unit tests created
 - [x] Integration tests created
+- [x] **Feature flag removed** (cleanup complete)
+- [x] **Mock function removed** (cleanup complete)
 
 ## Usage Examples
 
@@ -225,14 +212,12 @@ orchestrator = RAGOrchestrator(
 result = orchestrator.rag_with_rlsa(...)
 ```
 
-### Disable Real Retrieval (Use Mock)
-```bash
-export USE_REAL_VECTOR_RETRIEVAL=false
-```
+### Historical: Disable Real Retrieval (No Longer Available)
+> **Note**: This section is historical. The feature flag has been removed. All code now uses real vector store retrieval.
 
-```python
-# Mock retrieval will be used
-result = orchestrator.rag_with_rlsa(...)
+```bash
+# This no longer works - feature flag removed
+# export USE_REAL_VECTOR_RETRIEVAL=false  # ❌ Flag doesn't exist
 ```
 
 ### Monitor Migration via Logs
@@ -245,74 +230,63 @@ export LOG_LEVEL=DEBUG
 grep "migration" vecsec.log
 ```
 
-## Rollout Strategy
+## Rollout Strategy (Historical)
 
-1. **Phase 1**: Deploy with `USE_REAL_VECTOR_RETRIEVAL=true` (default)
-   - Monitor logs for `real_vector_retrieval` events
-   - Watch for `real_vector_retrieval_fallback` warnings
+> **Note**: Rollout is complete. This section is kept for historical reference.
 
-2. **Phase 2**: If issues occur, temporarily disable:
-   ```bash
-   export USE_REAL_VECTOR_RETRIEVAL=false
-   ```
-   See [Rollback Plan](./ROLLBACK_PLAN.md) for detailed rollback procedures.
+1. **Phase 1**: ✅ Deployed with `USE_REAL_VECTOR_RETRIEVAL=true` (default)
+2. **Phase 2**: ✅ Rollout successful, no rollback needed
+3. **Phase 3**: ✅ **COMPLETE** - Feature flag removed, always use real retrieval
 
-3. **Phase 3**: Once stable, remove feature flag (future cleanup)
-   - Remove `USE_REAL_VECTOR_RETRIEVAL` checks
-   - Always use real retrieval
-   - Remove mock fallback (or keep as emergency fallback)
+## Rollback Plan (Historical)
 
-## Rollback Plan
+> **Note**: Rollback plan is no longer applicable. The feature flag has been removed, so rollback to mock is not possible. This section is kept for historical reference only.
 
-If issues are discovered, see the [Rollback Plan](./ROLLBACK_PLAN.md) for:
-- Quick rollback procedures (feature flag)
-- Full code rollback steps
-- Rollback verification checklist
-- When to rollback decision tree
-
-## Files Modified
+## Files Modified (Historical)
 
 1. `src/sec_agent/config.py`
-   - Added `USE_REAL_VECTOR_RETRIEVAL` to `CONFIG_SCHEMA`
-   - Added `USE_REAL_VECTOR_RETRIEVAL` constant
+   - ✅ Added `USE_REAL_VECTOR_RETRIEVAL` to `CONFIG_SCHEMA` (removed in cleanup)
+   - ✅ Added `USE_REAL_VECTOR_RETRIEVAL` constant (removed in cleanup)
 
 2. `src/sec_agent/rag_orchestrator.py`
-   - Added logging import
-   - Added feature flag import
-   - Updated `rag_with_rlsa()` to use feature flag
-   - Added migration logging
+   - ✅ Added logging import
+   - ✅ Removed feature flag import (cleanup)
+   - ✅ Updated `rag_with_rlsa()` to always use real retrieval
+   - ✅ Added migration logging (simplified after cleanup)
 
-3. `src/sec_agent/tests/test_rag_orchestrator_migration.py` (NEW)
-   - Unit tests for feature flag behavior
-   - Integration tests for real vector store
-   - API contract verification tests
+3. `src/sec_agent/tests/test_rag_orchestrator.py` (renamed from `test_rag_orchestrator_migration.py`)
+   - ✅ Removed feature flag tests (cleanup)
+   - ✅ Integration tests for real vector store
+   - ✅ API contract verification tests
 
-## Verification
+## Verification (Current)
 
-To verify the migration is working:
+To verify the system is working:
 
 ```bash
-# 1. Check feature flag is enabled (default)
-python3 -c "from src.sec_agent.config import USE_REAL_VECTOR_RETRIEVAL; print(USE_REAL_VECTOR_RETRIEVAL)"
-# Should output: True
+# 1. Feature flag no longer exists - all code uses real retrieval
+# python3 -c "from src.sec_agent.config import USE_REAL_VECTOR_RETRIEVAL; print(USE_REAL_VECTOR_RETRIEVAL)"
+# ❌ This will fail - flag doesn't exist
 
 # 2. Run integration test
 python3 scripts/test_chromadb.sh
 
-# 3. Check logs for migration events
-grep -i "migration\|real vector" vecsec.log
+# 3. Check logs for retrieval events
+grep -i "vector retrieval\|vector store" vecsec.log
 ```
 
 ## Summary
 
-✅ All migration requirements have been implemented:
+✅ **Migration Complete** - All requirements implemented and cleanup finished:
 - Vector store connection initialized ✅
 - Real retrieval function called ✅
-- Feature flag for gradual rollout ✅
-- Backward compatibility maintained ✅
+- Feature flag for gradual rollout ✅ (removed after successful rollout)
+- Backward compatibility maintained ✅ (removed after successful rollout)
 - Migration logging implemented ✅
 - API contract preserved ✅
 - Unit and integration tests created ✅
+- **Feature flag removed** ✅ (cleanup complete)
+- **Mock function removed** ✅ (cleanup complete)
 
-The migration is **production-ready** and can be rolled out gradually using the feature flag.
+The migration is **complete** and **production-ready**. All code uses real vector store retrieval with no fallback to mock.
 

@@ -1,7 +1,7 @@
 # Test Suite Explanations
 
 ## Overview
-This document explains what each test in `test_metadata_generator_real.py` does and why it's important.
+This document explains what each test in `test_metadata_generator.py` does and why it's important.
 
 ---
 
@@ -59,14 +59,14 @@ This document explains what each test in `test_metadata_generator_real.py` does 
 ---
 
 ### 5. `test_handles_errors_gracefully`
-**Purpose**: Tests error handling and fallback mechanism.
+**Purpose**: Tests error handling when vector store operations fail.
 
 **What it tests**:
 - When vector store raises an exception, function doesn't crash
-- Falls back to mock metadata generator
-- Returns valid results even on error
+- Returns error metadata with appropriate error indicators
+- Returns valid metadata structure even on error (with "emb-error" ID)
 
-**Why it matters**: Ensures system resilience - graceful degradation when vector store is unavailable.
+**Why it matters**: Ensures system resilience - graceful error handling when vector store is unavailable.
 
 ---
 
@@ -112,10 +112,10 @@ This document explains what each test in `test_metadata_generator_real.py` does 
 
 **What it tests**:
 - Function doesn't crash when vector_store is None
-- Falls back to mock metadata generator
-- Returns valid results
+- Returns error metadata indicating vector store is unavailable
+- Returns valid metadata structure (with "emb-error" ID)
 
-**Why it matters**: Handles edge case where vector store might not be initialized.
+**Why it matters**: Handles edge case where vector store might not be initialized, ensuring graceful error handling.
 
 ---
 
@@ -241,7 +241,7 @@ This document explains what each test in `test_metadata_generator_real.py` does 
 |----------|------------|---------|
 | **Connection & Search** | 3 tests | Verify vector store is used correctly |
 | **Tenant Filtering** | 2 tests | Security - tenant isolation |
-| **Error Handling** | 3 tests | Resilience - graceful degradation |
+| **Error Handling** | 3 tests | Resilience - graceful error handling |
 | **Data Format** | 2 tests | Metadata conversion (topics, IDs) |
 | **Query Variation** | 1 test | Different queries return different results |
 | **Score Realism** | 1 test | Scores reflect actual similarity |
@@ -255,12 +255,12 @@ This document explains what each test in `test_metadata_generator_real.py` does 
 
 ```bash
 # Run all tests
-python3 src/sec_agent/tests/test_metadata_generator_real.py
+python3 src/sec_agent/tests/test_metadata_generator.py
 
 # Run specific test class
-python3 -m unittest src.sec_agent.tests.test_metadata_generator_real.TestGenerateRetrievalMetadataReal
+python3 -m unittest src.sec_agent.tests.test_metadata_generator.TestGenerateRetrievalMetadata
 
 # Run specific test
-python3 -m unittest src.sec_agent.tests.test_metadata_generator_real.TestGenerateRetrievalMetadataReal.test_tenant_isolation
+python3 -m unittest src.sec_agent.tests.test_metadata_generator.TestGenerateRetrievalMetadata.test_tenant_isolation
 ```
 

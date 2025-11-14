@@ -157,12 +157,6 @@ CONFIG_SCHEMA: dict[str, dict[str, Any]] = {
         "default": None,
         "description": "BaseTen API key for embeddings",
     },
-    "USE_REAL_VECTOR_RETRIEVAL": {
-        "type": bool,
-        "required": False,
-        "default": True,
-        "description": "Enable real vector store retrieval (migration flag). Set to false to use mock metadata generator.",
-    },
 }
 
 
@@ -372,18 +366,6 @@ if not logging.getLogger().handlers:
     # If LOG_FILE is set OR LOG_TO_CONSOLE is true, configure logging
     if _log_file or _log_to_console:
         setup_logging(log_file=_log_file, log_level=_log_level, log_to_console=_log_to_console)
-
-
-# ============================================================================
-# Feature Flags
-# ============================================================================
-
-# Migration flag for real vector retrieval
-USE_REAL_VECTOR_RETRIEVAL = _parse_bool(
-    os.getenv(
-        "USE_REAL_VECTOR_RETRIEVAL", str(CONFIG_SCHEMA["USE_REAL_VECTOR_RETRIEVAL"]["default"])
-    )
-)
 
 
 # ============================================================================

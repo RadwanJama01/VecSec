@@ -10,7 +10,7 @@ This runbook provides step-by-step procedures for common operational issues with
 2. [Performance Degradation](#performance-degradation)
 3. [Tenant Data Leakage Concerns](#tenant-data-leakage-concerns)
 4. [Monitoring Dashboard Issues](#monitoring-dashboard-issues)
-5. [Feature Flag Management](#feature-flag-management)
+5. [Vector Store Configuration](#vector-store-configuration)
 6. [Vector Store Connectivity](#vector-store-connectivity)
 7. [Alert Response Procedures](#alert-response-procedures)
 
@@ -19,9 +19,9 @@ This runbook provides step-by-step procedures for common operational issues with
 ## Vector Retrieval Failures
 
 ### Symptoms
-- High error rates in logs: "Real vector retrieval failed, falling back to mock"
+- High error rates in logs: "Vector retrieval failed"
 - Alert: `VectorRetrievalFailure` firing
-- Users experiencing degraded functionality
+- Users experiencing degraded functionality (empty or error responses)
 - Metrics showing `vecsec_vector_retrieval_failures_total` increasing
 
 ### Diagnosis Steps
@@ -52,18 +52,7 @@ This runbook provides step-by-step procedures for common operational issues with
 
 ### Resolution Steps
 
-**Option 1: Quick Rollback (Recommended for Critical Issues)**
-```bash
-# Disable real retrieval, use mock
-export USE_REAL_VECTOR_RETRIEVAL=false
-
-# Restart service
-systemctl restart vecsec
-# OR
-docker-compose restart vecsec-agent
-```
-
-**Option 2: Fix Vector Store Connection**
+**Option 1: Fix Vector Store Connection**
 ```bash
 # Check ChromaDB path
 echo $CHROMA_PATH
@@ -78,7 +67,7 @@ docker-compose restart chromadb
 python3 scripts/test_vector_store_connection.py
 ```
 
-**Option 3: Check Resource Limits**
+**Option 2: Check Resource Limits**
 ```bash
 # Check disk space
 df -h $CHROMA_PATH
@@ -92,11 +81,11 @@ ps aux | grep chroma
 
 ### Verification
 ```bash
-# Verify feature flag
-python3 -c "from src.sec_agent.config import USE_REAL_VECTOR_RETRIEVAL; print(f'Real retrieval: {USE_REAL_VECTOR_RETRIEVAL}')"
-
 # Check logs for successful retrieval
-grep "Using real vector store" /path/to/logs/*.log | tail -5
+grep "Vector retrieval successful" /path/to/logs/*.log | tail -5
+
+# Check for errors
+grep "Vector retrieval failed" /path/to/logs/*.log | tail -5
 
 # Verify metrics improving
 curl 'http://localhost:9090/api/v1/query?query=rate(vecsec_vector_retrieval_success_total[5m])'
@@ -175,11 +164,11 @@ grep -i cache /path/to/config
 # Enable response caching if available
 ```
 
-**Option 4: Temporary Rollback**
+**Option 4: Scale Resources**
 ```bash
-# If performance is critical, temporarily use mock
-export USE_REAL_VECTOR_RETRIEVAL=false
-systemctl restart vecsec
+# Increase system resources if performance is critical
+# Consider horizontal scaling or resource upgrades
+# Note: No rollback to mock is available - all code uses real vector store
 ```
 
 ### Verification
@@ -211,18 +200,18 @@ watch -n 5 'curl -s "http://localhost:9090/api/v1/query?query=histogram_quantile
    pytest tests/test_e2e_validation.py::TestE2EValidation::test_e2e_tenant_isolation -v
    
    # Run unit tests
-   pytest src/sec_agent/tests/test_metadata_generator_real.py -k tenant -v
+   pytest src/sec_agent/tests/test_metadata_generator.py -k tenant -v
    ```
 
 3. **Check Vector Store Filters**
    ```bash
    # Verify tenant filtering in queries
    python3 -c "
-   from src.sec_agent.metadata_generator import generate_retrieval_metadata_real
+   from src.sec_agent.metadata_generator import generate_retrieval_metadata
    from src.sec_agent.config import initialize_vector_store
    
    vs = initialize_vector_store()
-   results = generate_retrieval_metadata_real(
+   results = generate_retrieval_metadata(
        {'query': 'test'},
        'tenant_a',
        vs
@@ -238,12 +227,15 @@ watch -n 5 'curl -s "http://localhost:9090/api/v1/query?query=histogram_quantile
 
 **Immediate Action:**
 ```bash
-# If leakage confirmed, disable real retrieval immediately
-export USE_REAL_VECTOR_RETRIEVAL=false
-systemctl restart vecsec
+# If leakage confirmed, take immediate action:
+# 1. Stop the service to prevent further leakage
+systemctl stop vecsec
+# OR
+docker-compose stop vecsec-agent
 
-# Notify security team
-# Review access logs
+# 2. Notify security team immediately
+# 3. Review access logs
+# 4. Audit recent queries
 ```
 
 **Investigation:**
@@ -251,12 +243,14 @@ systemctl restart vecsec
 2. Check vector store metadata for tenant_id correctness
 3. Audit all queries for proper tenant filtering
 4. Review RLS enforcer logic
+5. Check vector store filter implementation
 
 **Fix:**
 1. Correct tenant filtering in metadata generator
 2. Add additional validation in RLS enforcer
 3. Re-run all tenant isolation tests
-4. Gradually re-enable with monitoring
+4. Verify fix with comprehensive testing
+5. Re-enable service with monitoring
 
 ### Verification
 ```bash
@@ -352,40 +346,49 @@ curl -s http://localhost:9091/metrics | grep vecsec_vector_retrieval
 
 ---
 
-## Feature Flag Management
+## Vector Store Configuration
 
-### Enable Real Retrieval
+### Enable ChromaDB (Persistent Storage)
 ```bash
 # Set environment variable
-export USE_REAL_VECTOR_RETRIEVAL=true
+export USE_CHROMA=true
+export CHROMA_PATH=./chroma_db
 
 # Or in .env file
-echo "USE_REAL_VECTOR_RETRIEVAL=true" >> .env
+echo "USE_CHROMA=true" >> .env
+echo "CHROMA_PATH=./chroma_db" >> .env
 
 # Restart service
 systemctl restart vecsec
 ```
 
-### Disable Real Retrieval (Rollback)
+### Use InMemory Vector Store (Temporary/Testing)
 ```bash
-# Set environment variable
-export USE_REAL_VECTOR_RETRIEVAL=false
+# Disable ChromaDB to use in-memory store
+export USE_CHROMA=false
 
 # Or in .env file
-sed -i 's/USE_REAL_VECTOR_RETRIEVAL=true/USE_REAL_VECTOR_RETRIEVAL=false/' .env
+echo "USE_CHROMA=false" >> .env
 
 # Restart service
 systemctl restart vecsec
 ```
 
-### Check Current Status
+### Check Current Configuration
 ```bash
-# Check feature flag value
-python3 -c "from src.sec_agent.config import USE_REAL_VECTOR_RETRIEVAL; print(f'Real retrieval: {USE_REAL_VECTOR_RETRIEVAL}')"
+# Check vector store type
+python3 -c "
+from src.sec_agent.config import initialize_vector_store
+from src.sec_agent.mock_llm import MockEmbeddings
+vs = initialize_vector_store(MockEmbeddings())
+print(f'Vector store type: {type(vs).__name__}')
+"
 
-# Check logs
-grep "Feature flag" /path/to/logs/*.log | tail -5
+# Check logs for vector store initialization
+grep "vector store" /path/to/logs/*.log | tail -5
 ```
+
+**Note**: All code uses real vector store retrieval. There is no feature flag to disable it. The only configuration is choosing between ChromaDB (persistent) or InMemoryVectorStore (temporary).
 
 ---
 
@@ -449,8 +452,9 @@ python3 -c "import chromadb; client = chromadb.Client(); print('Connected')"
 
 1. Check vector store connectivity (see [Vector Store Connectivity](#vector-store-connectivity))
 2. Review error logs
-3. If unable to fix quickly, rollback to mock retrieval
+3. If unable to fix quickly, service will return empty/error metadata (no rollback available)
 4. Notify team of issue
+5. Consider switching to InMemoryVectorStore temporarily if ChromaDB is the issue
 
 ### VectorRetrievalTimeout Alert
 
@@ -470,7 +474,12 @@ python3 -c "import chromadb; client = chromadb.Client(); print('Connected')"
 1. Check vector store service status
 2. Restart if needed
 3. Verify data integrity
-4. Rollback if service cannot be restored quickly
+4. If ChromaDB cannot be restored, switch to InMemoryVectorStore temporarily:
+   ```bash
+   export USE_CHROMA=false
+   systemctl restart vecsec
+   ```
+5. Note: InMemoryVectorStore is not persistent - data will be lost on restart
 
 ---
 
@@ -501,13 +510,18 @@ tail -f /path/to/logs/vecsec.log
 # Check metrics
 curl http://localhost:9091/metrics | grep vecsec_vector_retrieval
 
-# Rollback to mock
-export USE_REAL_VECTOR_RETRIEVAL=false && systemctl restart vecsec
+# Switch to InMemoryVectorStore (if ChromaDB issues)
+export USE_CHROMA=false && systemctl restart vecsec
 
 # Run E2E tests
 pytest tests/test_e2e_validation.py -v
 
-# Check feature flag
-python3 -c "from src.sec_agent.config import USE_REAL_VECTOR_RETRIEVAL; print(USE_REAL_VECTOR_RETRIEVAL)"
+# Check vector store type
+python3 -c "
+from src.sec_agent.config import initialize_vector_store
+from src.sec_agent.mock_llm import MockEmbeddings
+vs = initialize_vector_store(MockEmbeddings())
+print(f'Vector store: {type(vs).__name__}')
+"
 ```
 
