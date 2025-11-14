@@ -622,7 +622,7 @@ class TestGenerateRetrievalMetadataRealIntegration(unittest.TestCase):
             self.assertIsInstance(item["topics"], list)
             if "security" in item["topics"] or "access_control" in item["topics"]:
                 # Verify topics were parsed correctly
-                self.assertTrue(len(item["topics"]) > 0)
+                self.assertGreater(len(item["topics"]), 0)
 
 
 class TestGenerateRetrievalMetadataRealPerformance(unittest.TestCase):

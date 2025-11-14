@@ -134,13 +134,13 @@ jobs:
           LOG_LEVEL: 'INFO'
         run: |
           # Run orchestrator tests (includes integration tests)
-          pytest src/sec_agent/tests/test_rag_orchestrator_migration.py \
+          pytest src/sec_agent/tests/test_rag_orchestrator.py \
             --maxfail=1 \
             --disable-warnings \
             -v
           
           # Run metadata generator tests
-          pytest src/sec_agent/tests/test_metadata_generator_real.py \
+          pytest src/sec_agent/tests/test_metadata_generator.py \
             --maxfail=1 \
             --disable-warnings \
             -v
