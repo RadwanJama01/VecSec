@@ -12,55 +12,12 @@ logger = logging.getLogger(__name__)
 
 
 def generate_retrieval_metadata(
-    query_context: dict[str, Any], user_tenant: str
-) -> list[dict[str, Any]]:
-    """Generate mock retrieval metadata based on query context"""
-    metadata = []
-
-    # Simulate documents that might be retrieved
-    target_tenant = (
-        query_context.get("target_tenant") or user_tenant
-    )  # Default to user tenant if None
-    topics = query_context.get("topics", [])
-
-    # Generate mock embeddings with different tenants and sensitivities
-    for i, topic in enumerate(topics):
-        metadata.append(
-            {
-                "embedding_id": f"emb-{i + 1:03d}",
-                "tenant_id": target_tenant,
-                "sensitivity": TENANT_POLICIES.get(target_tenant, {}).get(
-                    "sensitivity", "INTERNAL"
-                ),
-                "topics": [topic],
-                "document_id": f"doc-{topic}-{i + 1:03d}",
-                "retrieval_score": 0.9 - (i * 0.1),
-            }
-        )
-
-    # Add some cross-tenant documents to test isolation (only if explicitly targeting different tenant)
-    if target_tenant != user_tenant and query_context.get("target_tenant"):
-        metadata.append(
-            {
-                "embedding_id": "emb-cross-001",
-                "tenant_id": user_tenant,
-                "sensitivity": TENANT_POLICIES.get(user_tenant, {}).get("sensitivity", "INTERNAL"),
-                "topics": topics[:1] if topics else ["general"],
-                "document_id": "doc-cross-001",
-                "retrieval_score": 0.7,
-            }
-        )
-
-    return metadata
-
-
-def generate_retrieval_metadata_real(
     query_context: dict[str, Any],
     user_tenant: str,
     vector_store,
 ) -> list[dict[str, Any]]:
     """
-    Generate REAL retrieval metadata using actual vector search
+    Generate retrieval metadata using actual vector search
 
     Args:
         query_context: Contains 'query' and other context
@@ -68,7 +25,7 @@ def generate_retrieval_metadata_real(
         vector_store: The initialized vector store instance
 
     Returns:
-        List of metadata dicts matching the mock format
+        List of metadata dicts with document information and retrieval scores
     """
 
     # Extract query text from context
@@ -183,13 +140,23 @@ def generate_retrieval_metadata_real(
         return metadata
     except Exception as e:
         logger.error(
-            "Vector search failed, falling back to mock metadata",
+            "Vector search failed",
             exc_info=True,
             extra={
                 "tenant_id": user_tenant,
                 "query_preview": query_text[:100],
                 "error_type": type(e).__name__,
-                "fallback": "mock_metadata",
             },
         )
-        return generate_retrieval_metadata(query_context, user_tenant)
+        # Return empty metadata on error
+        return [
+            {
+                "embedding_id": "emb-error",
+                "tenant_id": user_tenant,
+                "sensitivity": "INTERNAL",
+                "topics": query_context.get("topics", []),
+                "document_id": "doc-error",
+                "retrieval_score": 0.0,
+                "content": "Vector search error occurred",
+            }
+        ]

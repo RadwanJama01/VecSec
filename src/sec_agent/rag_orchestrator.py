@@ -12,8 +12,8 @@ from typing import TypedDict
 from langchain_core.documents import Document
 from langgraph.graph import START, StateGraph
 
-from .config import METRICS_ENABLED, USE_REAL_VECTOR_RETRIEVAL
-from .metadata_generator import generate_retrieval_metadata, generate_retrieval_metadata_real
+from .config import METRICS_ENABLED
+from .metadata_generator import generate_retrieval_metadata
 from .query_parser import extract_query_context
 from .rls_enforcer import rlsa_guard_comprehensive
 
@@ -84,64 +84,60 @@ class RAGOrchestrator:
 
         query_context = extract_query_context(query)
 
-        # Migration: Use real vector store if feature flag enabled, otherwise use mock
-        if USE_REAL_VECTOR_RETRIEVAL and self.vector_store is not None:
-            logger.info(
-                "Using real vector store for retrieval metadata",
+        # Generate retrieval metadata using vector store
+        if self.vector_store is None:
+            logger.warning(
+                "Vector store is None, cannot retrieve documents",
                 extra={
                     "tenant_id": tenant_id,
-                    "migration": "real_vector_retrieval",
                     "query_preview": query[:100] if query else "",
                 },
             )
+            # Return empty metadata when vector store is unavailable
+            retrieval_metadata = [
+                {
+                    "embedding_id": "emb-empty",
+                    "tenant_id": tenant_id,
+                    "sensitivity": "INTERNAL",
+                    "topics": query_context.get("topics", []),
+                    "document_id": "doc-empty",
+                    "retrieval_score": 0.0,
+                    "content": "Vector store not available",
+                }
+            ]
+        else:
             try:
-                retrieval_metadata = generate_retrieval_metadata_real(
+                retrieval_metadata = generate_retrieval_metadata(
                     query_context, tenant_id, self.vector_store
                 )
                 logger.debug(
-                    f"Real vector retrieval successful: {len(retrieval_metadata)} results",
+                    f"Vector retrieval successful: {len(retrieval_metadata)} results",
                     extra={
                         "tenant_id": tenant_id,
                         "result_count": len(retrieval_metadata),
-                        "migration": "real_vector_retrieval",
                     },
                 )
             except Exception as e:
-                # Fallback to mock on error (backward compatibility)
-                # Only log full traceback at DEBUG level to reduce noise in tests
-                logger.warning(
-                    f"Real vector retrieval failed, falling back to mock: {e}",
-                    exc_info=logger.isEnabledFor(
-                        logging.DEBUG
-                    ),  # Full traceback only in DEBUG mode
+                logger.error(
+                    f"Vector retrieval failed: {e}",
+                    exc_info=logger.isEnabledFor(logging.DEBUG),
                     extra={
                         "tenant_id": tenant_id,
-                        "migration": "real_vector_retrieval_fallback",
                         "error_type": type(e).__name__,
                     },
                 )
-                retrieval_metadata = generate_retrieval_metadata(query_context, tenant_id)
-        else:
-            # Backward compatibility: Use mock metadata generator
-            if not USE_REAL_VECTOR_RETRIEVAL:
-                logger.debug(
-                    "Feature flag disabled, using mock metadata generator",
-                    extra={
+                # Return error metadata
+                retrieval_metadata = [
+                    {
+                        "embedding_id": "emb-error",
                         "tenant_id": tenant_id,
-                        "migration": "mock_metadata",
-                        "feature_flag": "USE_REAL_VECTOR_RETRIEVAL=false",
-                    },
-                )
-            elif self.vector_store is None:
-                logger.warning(
-                    "Vector store is None, falling back to mock metadata generator",
-                    extra={
-                        "tenant_id": tenant_id,
-                        "migration": "mock_metadata_fallback",
-                        "reason": "vector_store_none",
-                    },
-                )
-            retrieval_metadata = generate_retrieval_metadata(query_context, tenant_id)
+                        "sensitivity": "INTERNAL",
+                        "topics": query_context.get("topics", []),
+                        "document_id": "doc-error",
+                        "retrieval_score": 0.0,
+                        "content": "Vector retrieval error occurred",
+                    }
+                ]
 
         # Step 2: Comprehensive RLSA Enforcement
         decision = rlsa_guard_comprehensive(

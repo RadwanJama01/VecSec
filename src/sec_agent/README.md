@@ -201,19 +201,22 @@ query_context = extract_query_context("What is RAG?")
 
 ### 7. Metadata Generator (`metadata_generator.py`)
 
-Generates retrieval metadata for RLS enforcement.
+Generates retrieval metadata using vector store similarity search for RLS enforcement.
 
 **Usage:**
 ```python
 from src.sec_agent import generate_retrieval_metadata
+from src.sec_agent.config import initialize_vector_store
 
+vector_store = initialize_vector_store(embeddings)
 metadata = generate_retrieval_metadata(
     query_context={
         "query": "What is RAG?",
         "topics": ["rag"],
         "intent": "data_retrieval"
     },
-    user_tenant="tenantA"
+    user_tenant="tenantA",
+    vector_store=vector_store
 )
 # Returns list of metadata dicts with embedding_id, tenant_id, sensitivity, etc.
 ```
@@ -394,7 +397,6 @@ pytest src/sec_agent/tests/
 
 See individual module docstrings for known issues:
 - `embeddings_client.py`: Random embeddings fallback behavior
-- `metadata_generator.py`: Fake metadata generation (not real retrieval)
 - `policy_manager.py`: Hardcoded policies (not configurable)
 
 ## Dependencies

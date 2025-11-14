@@ -1,4 +1,4 @@
-# Test Quality Checklist for `generate_retrieval_metadata_real`
+# Test Quality Checklist for `generate_retrieval_metadata`
 
 ## ✅ Test Coverage
 
@@ -50,10 +50,10 @@
 ### Run Tests
 ```bash
 # Run all tests
-python3 src/sec_agent/tests/test_metadata_generator_real.py
+python3 src/sec_agent/tests/test_metadata_generator.py
 
 # Run with verbose output
-python3 src/sec_agent/tests/test_metadata_generator_real.py -v
+python3 src/sec_agent/tests/test_metadata_generator.py -v
 ```
 
 ### Check Coverage
@@ -62,7 +62,7 @@ python3 src/sec_agent/tests/test_metadata_generator_real.py -v
 pip install coverage
 
 # Run with coverage
-coverage run src/sec_agent/tests/test_metadata_generator_real.py
+coverage run src/sec_agent/tests/test_metadata_generator.py
 coverage report -m
 ```
 

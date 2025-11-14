@@ -13,8 +13,7 @@ from typing import Any
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-# Set environment for real retrieval
-os.environ['USE_REAL_VECTOR_RETRIEVAL'] = 'true'
+# Set environment for real vector store
 os.environ['USE_CHROMA'] = 'true'
 os.environ['CHROMA_PATH'] = './chroma_db_e2e'
 
@@ -61,7 +60,7 @@ class TestE2EValidation(unittest.TestCase):
         
         print("✅ Test environment initialized")
         print(f"✅ Vector store: {type(cls.vector_store).__name__}")
-        print(f"✅ Real retrieval enabled: {os.getenv('USE_REAL_VECTOR_RETRIEVAL', 'false')}")
+        print(f"✅ ChromaDB enabled: {os.getenv('USE_CHROMA', 'false')}")
         print("="*70 + "\n")
 
     def test_e2e_legitimate_query_allowed(self):
@@ -193,15 +192,15 @@ class TestE2EValidation(unittest.TestCase):
             role=role
         )
         
-        # If allowed, real retrieval should have been used
+        # If allowed, real vector store should have been used
         # Check logs or internal state to verify
-        use_real = os.getenv('USE_REAL_VECTOR_RETRIEVAL', 'false').lower() == 'true'
+        use_chroma = os.getenv('USE_CHROMA', 'false').lower() == 'true'
         
-        if use_real:
-            print(f"   ✅ Real retrieval enabled: {use_real}")
+        if use_chroma:
+            print(f"   ✅ ChromaDB enabled: {use_chroma}")
             print(f"   ✅ Query result: {'ALLOWED' if result else 'BLOCKED'}")
         else:
-            print(f"   ⚠️  Real retrieval not enabled (using mock)")
+            print(f"   ⚠️  ChromaDB not enabled (using in-memory vector store)")
 
     def test_e2e_performance_sla(self):
         """E2E: Performance metrics within SLA"""

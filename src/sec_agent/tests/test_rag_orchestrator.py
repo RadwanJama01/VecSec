@@ -1,12 +1,11 @@
 """
-Unit and Integration Tests for RAG Orchestrator Migration
+Unit and Integration Tests for RAG Orchestrator
 
-Tests the migration from mock to real vector retrieval with:
-- Feature flag behavior (USE_REAL_VECTOR_RETRIEVAL)
-- Backward compatibility (fallback to mock)
-- Migration logging
+Tests the RAG orchestrator with vector store retrieval:
+- Vector store integration
+- Error handling when vector store is unavailable
 - API contract preservation
-- Error handling
+- Logging behavior
 """
 
 import os
@@ -25,8 +24,8 @@ from langchain_core.documents import Document  # noqa: E402
 from src.sec_agent.rag_orchestrator import RAGOrchestrator  # noqa: E402
 
 
-class TestRAGOrchestratorMigration(unittest.TestCase):
-    """Unit tests for migration feature flag and backward compatibility"""
+class TestRAGOrchestrator(unittest.TestCase):
+    """Unit tests for RAG orchestrator with vector store"""
 
     def setUp(self):
         """Set up test fixtures"""
@@ -47,47 +46,10 @@ class TestRAGOrchestratorMigration(unittest.TestCase):
         self.mock_graph = MagicMock()
         self.mock_graph.invoke.return_value = {"answer": "Test answer"}
 
-    def test_feature_flag_defaults_to_true(self):
-        """Test that feature flag defaults to True (real retrieval enabled)"""
-        # Reset env var to ensure default
-        with patch.dict(os.environ, {}, clear=False):
-            if "USE_REAL_VECTOR_RETRIEVAL" in os.environ:
-                del os.environ["USE_REAL_VECTOR_RETRIEVAL"]
-            # Reload config to get default
-            import importlib
-
-            import src.sec_agent.config as config_module
-
-            importlib.reload(config_module)
-            # Default should be True
-            self.assertTrue(config_module.USE_REAL_VECTOR_RETRIEVAL)
-
-    def test_feature_flag_respects_env_var(self):
-        """Test that feature flag respects USE_REAL_VECTOR_RETRIEVAL env var"""
-        # Test with flag enabled
-        with patch.dict(os.environ, {"USE_REAL_VECTOR_RETRIEVAL": "true"}):
-            import importlib
-
-            import src.sec_agent.config as config_module
-
-            importlib.reload(config_module)
-            self.assertTrue(config_module.USE_REAL_VECTOR_RETRIEVAL)
-
-        # Test with flag disabled
-        with patch.dict(os.environ, {"USE_REAL_VECTOR_RETRIEVAL": "false"}):
-            import importlib
-
-            import src.sec_agent.config as config_module
-
-            importlib.reload(config_module)
-            self.assertFalse(config_module.USE_REAL_VECTOR_RETRIEVAL)
-
-    @patch("src.sec_agent.rag_orchestrator.generate_retrieval_metadata_real")
     @patch("src.sec_agent.rag_orchestrator.generate_retrieval_metadata")
-    @patch("src.sec_agent.rag_orchestrator.USE_REAL_VECTOR_RETRIEVAL", True)
-    def test_uses_real_retrieval_when_flag_enabled(self, mock_mock_gen, mock_real_gen):
-        """Test that real retrieval is used when feature flag is enabled"""
-        mock_real_gen.return_value = [{"document_id": "doc-real-001", "retrieval_score": 0.85}]
+    def test_uses_vector_store_retrieval(self, mock_gen):
+        """Test that vector store retrieval is used"""
+        mock_gen.return_value = [{"document_id": "doc-real-001", "retrieval_score": 0.85}]
 
         orchestrator = RAGOrchestrator(
             vector_store=self.mock_vector_store,
@@ -104,16 +66,16 @@ class TestRAGOrchestratorMigration(unittest.TestCase):
             role="analyst",
         )
 
-        # Should call real retrieval function
-        mock_real_gen.assert_called_once()
-        mock_mock_gen.assert_not_called()
+        # Should call retrieval function with vector store
+        mock_gen.assert_called_once()
+        call_args = mock_gen.call_args
+        self.assertEqual(len(call_args[0]), 3)  # query_context, tenant_id, vector_store
+        self.assertEqual(call_args[0][2], self.mock_vector_store)
 
-    @patch("src.sec_agent.rag_orchestrator.generate_retrieval_metadata_real")
     @patch("src.sec_agent.rag_orchestrator.generate_retrieval_metadata")
-    @patch("src.sec_agent.rag_orchestrator.USE_REAL_VECTOR_RETRIEVAL", False)
-    def test_uses_mock_retrieval_when_flag_disabled(self, mock_mock_gen, mock_real_gen):
-        """Test that mock retrieval is used when feature flag is disabled"""
-        mock_mock_gen.return_value = [{"document_id": "doc-mock-001", "retrieval_score": 0.9}]
+    def test_handles_vector_store_error(self, mock_gen):
+        """Test that handles errors when vector retrieval fails"""
+        mock_gen.side_effect = Exception("Vector store error")
 
         orchestrator = RAGOrchestrator(
             vector_store=self.mock_vector_store,
@@ -130,44 +92,11 @@ class TestRAGOrchestratorMigration(unittest.TestCase):
             role="analyst",
         )
 
-        # Should call mock retrieval function
-        mock_mock_gen.assert_called_once()
-        mock_real_gen.assert_not_called()
+        # Should call retrieval function and handle error gracefully
+        mock_gen.assert_called_once()
 
-    @patch("src.sec_agent.rag_orchestrator.generate_retrieval_metadata_real")
-    @patch("src.sec_agent.rag_orchestrator.generate_retrieval_metadata")
-    @patch("src.sec_agent.rag_orchestrator.USE_REAL_VECTOR_RETRIEVAL", True)
-    def test_falls_back_to_mock_on_real_retrieval_error(self, mock_mock_gen, mock_real_gen):
-        """Test that falls back to mock when real retrieval fails"""
-        mock_real_gen.side_effect = Exception("Vector store error")
-        mock_mock_gen.return_value = [{"document_id": "doc-fallback-001", "retrieval_score": 0.8}]
-
-        orchestrator = RAGOrchestrator(
-            vector_store=self.mock_vector_store,
-            llm=self.mock_llm,
-            prompt_template=self.mock_prompt_template,
-        )
-        orchestrator.graph = self.mock_graph
-
-        _ = orchestrator.rag_with_rlsa(
-            user_id="user1",
-            tenant_id="tenant_a",
-            clearance="INTERNAL",
-            query="test query",
-            role="analyst",
-        )
-
-        # Should try real first, then fallback to mock
-        mock_real_gen.assert_called_once()
-        mock_mock_gen.assert_called_once()
-
-    @patch("src.sec_agent.rag_orchestrator.generate_retrieval_metadata_real")
-    @patch("src.sec_agent.rag_orchestrator.generate_retrieval_metadata")
-    @patch("src.sec_agent.rag_orchestrator.USE_REAL_VECTOR_RETRIEVAL", True)
-    def test_falls_back_to_mock_when_vector_store_none(self, mock_mock_gen, mock_real_gen):
-        """Test that falls back to mock when vector_store is None"""
-        mock_mock_gen.return_value = [{"document_id": "doc-fallback-001", "retrieval_score": 0.8}]
-
+    def test_handles_none_vector_store(self):
+        """Test that handles None vector store gracefully"""
         orchestrator = RAGOrchestrator(
             vector_store=None,  # None vector store
             llm=self.mock_llm,
@@ -175,7 +104,7 @@ class TestRAGOrchestratorMigration(unittest.TestCase):
         )
         orchestrator.graph = self.mock_graph
 
-        _ = orchestrator.rag_with_rlsa(
+        result = orchestrator.rag_with_rlsa(
             user_id="user1",
             tenant_id="tenant_a",
             clearance="INTERNAL",
@@ -183,45 +112,14 @@ class TestRAGOrchestratorMigration(unittest.TestCase):
             role="analyst",
         )
 
-        # Should use mock when vector_store is None
-        mock_mock_gen.assert_called_once()
-        mock_real_gen.assert_not_called()
-
-    @patch("src.sec_agent.rag_orchestrator.logger")
-    @patch("src.sec_agent.rag_orchestrator.generate_retrieval_metadata_real")
-    @patch("src.sec_agent.rag_orchestrator.USE_REAL_VECTOR_RETRIEVAL", True)
-    def test_logs_migration_info_when_using_real_retrieval(self, mock_real_gen, mock_logger):
-        """Test that migration logging occurs when using real retrieval"""
-        mock_real_gen.return_value = [{"document_id": "doc-real-001", "retrieval_score": 0.85}]
-
-        orchestrator = RAGOrchestrator(
-            vector_store=self.mock_vector_store,
-            llm=self.mock_llm,
-            prompt_template=self.mock_prompt_template,
-        )
-        orchestrator.graph = self.mock_graph
-
-        orchestrator.rag_with_rlsa(
-            user_id="user1",
-            tenant_id="tenant_a",
-            clearance="INTERNAL",
-            query="test query",
-            role="analyst",
-        )
-
-        # Check that migration logging occurred
-        log_calls = [str(call) for call in mock_logger.info.call_args_list]
-        migration_logged = any("real vector store" in str(call).lower() for call in log_calls)
-        self.assertTrue(
-            migration_logged, "Migration logging should occur when using real retrieval"
-        )
+        # Should complete without error, returning empty metadata
+        self.assertIsInstance(result, bool)
 
     @patch("src.sec_agent.rag_orchestrator.logger")
     @patch("src.sec_agent.rag_orchestrator.generate_retrieval_metadata")
-    @patch("src.sec_agent.rag_orchestrator.USE_REAL_VECTOR_RETRIEVAL", False)
-    def test_logs_migration_info_when_using_mock_retrieval(self, mock_mock_gen, mock_logger):
-        """Test that migration logging occurs when using mock retrieval"""
-        mock_mock_gen.return_value = [{"document_id": "doc-mock-001", "retrieval_score": 0.9}]
+    def test_logs_retrieval_info(self, mock_gen, mock_logger):
+        """Test that logging occurs when using vector retrieval"""
+        mock_gen.return_value = [{"document_id": "doc-real-001", "retrieval_score": 0.85}]
 
         orchestrator = RAGOrchestrator(
             vector_store=self.mock_vector_store,
@@ -238,12 +136,8 @@ class TestRAGOrchestratorMigration(unittest.TestCase):
             role="analyst",
         )
 
-        # Check that migration logging occurred (debug level for mock)
-        log_calls = [str(call) for call in mock_logger.debug.call_args_list]
-        migration_logged = any("mock metadata" in str(call).lower() for call in log_calls)
-        self.assertTrue(
-            migration_logged, "Migration logging should occur when using mock retrieval"
-        )
+        # Check that logging occurred
+        self.assertTrue(mock_logger.debug.called or mock_logger.info.called)
 
     def test_api_contract_unchanged(self):
         """Test that API contract (rag_with_rlsa signature) is unchanged"""
@@ -266,37 +160,9 @@ class TestRAGOrchestratorMigration(unittest.TestCase):
         # Should return boolean (True = allowed, False = blocked)
         self.assertIsInstance(result, bool)
 
-    @patch("src.sec_agent.rag_orchestrator.generate_retrieval_metadata_real")
-    @patch("src.sec_agent.rag_orchestrator.USE_REAL_VECTOR_RETRIEVAL", True)
-    def test_passes_vector_store_to_real_retrieval(self, mock_real_gen):
-        """Test that vector_store is passed correctly to real retrieval function"""
-        mock_real_gen.return_value = [{"document_id": "doc-real-001", "retrieval_score": 0.85}]
 
-        orchestrator = RAGOrchestrator(
-            vector_store=self.mock_vector_store,
-            llm=self.mock_llm,
-            prompt_template=self.mock_prompt_template,
-        )
-        orchestrator.graph = self.mock_graph
-
-        orchestrator.rag_with_rlsa(
-            user_id="user1",
-            tenant_id="tenant_a",
-            clearance="INTERNAL",
-            query="test query",
-            role="analyst",
-        )
-
-        # Check that vector_store was passed as third argument
-        call_args = mock_real_gen.call_args
-        self.assertIsNotNone(call_args)
-        args, kwargs = call_args
-        self.assertEqual(len(args), 3)  # query_context, tenant_id, vector_store
-        self.assertEqual(args[2], self.mock_vector_store)
-
-
-class TestRAGOrchestratorMigrationIntegration(unittest.TestCase):
-    """Integration tests for migration with real vector store"""
+class TestRAGOrchestratorIntegration(unittest.TestCase):
+    """Integration tests with real vector store"""
 
     def setUp(self):
         """Set up integration test fixtures"""
@@ -362,31 +228,30 @@ class TestRAGOrchestratorMigrationIntegration(unittest.TestCase):
         mock_graph = MagicMock()
         mock_graph.invoke.return_value = {"answer": "Test answer"}
 
-        with patch("src.sec_agent.rag_orchestrator.USE_REAL_VECTOR_RETRIEVAL", True):
-            orchestrator = RAGOrchestrator(
-                vector_store=vector_store, llm=mock_llm, prompt_template=mock_prompt
-            )
-            orchestrator.graph = mock_graph
+        orchestrator = RAGOrchestrator(
+            vector_store=vector_store, llm=mock_llm, prompt_template=mock_prompt
+        )
+        orchestrator.graph = mock_graph
 
-            # Execute query
-            result = orchestrator.rag_with_rlsa(
-                user_id="user1",
-                tenant_id="test_tenant",
-                clearance="INTERNAL",
-                query="security protocols",
-                role="analyst",
-            )
+        # Execute query
+        result = orchestrator.rag_with_rlsa(
+            user_id="user1",
+            tenant_id="test_tenant",
+            clearance="INTERNAL",
+            query="security protocols",
+            role="analyst",
+        )
 
-            # Should complete successfully
-            self.assertIsInstance(result, bool)
+        # Should complete successfully
+        self.assertIsInstance(result, bool)
 
     @unittest.skipIf(not hasattr(unittest.TestCase, "setUp"), "Skip if setUp failed")
-    def test_integration_backward_compatibility_mock_fallback(self):
-        """Integration test: Backward compatibility with mock fallback"""
+    def test_integration_handles_none_vector_store(self):
+        """Integration test: Handles None vector store gracefully"""
         if not self.vector_store_available:
             self.skipTest("Vector store not available")
 
-        # Create orchestrator with feature flag disabled
+        # Create orchestrator with None vector store
         mock_llm = MagicMock()
         mock_llm.invoke.return_value = MagicMock(content="Test answer")
         mock_prompt = MagicMock()
@@ -394,25 +259,24 @@ class TestRAGOrchestratorMigrationIntegration(unittest.TestCase):
         mock_graph = MagicMock()
         mock_graph.invoke.return_value = {"answer": "Test answer"}
 
-        with patch("src.sec_agent.rag_orchestrator.USE_REAL_VECTOR_RETRIEVAL", False):
-            orchestrator = RAGOrchestrator(
-                vector_store=None,  # Even with None, should work with mock
-                llm=mock_llm,
-                prompt_template=mock_prompt,
-            )
-            orchestrator.graph = mock_graph
+        orchestrator = RAGOrchestrator(
+            vector_store=None,  # None vector store
+            llm=mock_llm,
+            prompt_template=mock_prompt,
+        )
+        orchestrator.graph = mock_graph
 
-            # Execute query - should use mock metadata generator
-            result = orchestrator.rag_with_rlsa(
-                user_id="user1",
-                tenant_id="test_tenant",
-                clearance="INTERNAL",
-                query="test query",
-                role="analyst",
-            )
+        # Execute query - should handle None vector store gracefully
+        result = orchestrator.rag_with_rlsa(
+            user_id="user1",
+            tenant_id="test_tenant",
+            clearance="INTERNAL",
+            query="test query",
+            role="analyst",
+        )
 
-            # Should complete successfully with mock
-            self.assertIsInstance(result, bool)
+        # Should complete successfully with empty metadata
+        self.assertIsInstance(result, bool)
 
 
 class ColoredTestResult(unittest.TextTestResult):

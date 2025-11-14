@@ -75,10 +75,9 @@ echo ""
 echo -e "${YELLOW}🧪 Step 2: Unit Tests${NC}"
 echo "-----------------------------------"
 
-export USE_REAL_VECTOR_RETRIEVAL=false
 export LOG_LEVEL=WARNING
 
-echo "Running unit tests with mock retrieval..."
+echo "Running unit tests with mocked vector stores..."
 if pytest src/sec_agent/tests/ \
     --maxfail=1 \
     --disable-warnings \
@@ -101,7 +100,6 @@ echo ""
 echo -e "${YELLOW}🔗 Step 3: Integration Smoke Tests${NC}"
 echo "-----------------------------------"
 
-export USE_REAL_VECTOR_RETRIEVAL=true
 export USE_CHROMA=true
 export CHROMA_PATH=./chroma_db_ci
 export LOG_LEVEL=INFO
@@ -111,11 +109,11 @@ echo "Using CHROMA_PATH=${CHROMA_PATH}"
 
 # Note: Integration tests may require ChromaDB setup
 # If ChromaDB is not available, these tests will be skipped
-if pytest src/sec_agent/tests/test_rag_orchestrator_migration.py \
+if pytest src/sec_agent/tests/test_rag_orchestrator.py \
     --maxfail=1 \
     --disable-warnings \
     -v && \
-   pytest src/sec_agent/tests/test_metadata_generator_real.py \
+   pytest src/sec_agent/tests/test_metadata_generator.py \
     --maxfail=1 \
     --disable-warnings \
     -v; then
