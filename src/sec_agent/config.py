@@ -1,74 +1,14 @@
 """
 VecSec Security Agent - Configuration & Initialization Module
 
-This module handles all configuration, environment setup, and initialization for the VecSec
-security agent system. It provides a centralized configuration management layer with validation,
-schema-based env var handling, and robust initialization for vector stores, metrics, and
-documentation.
-
-Key Responsibilities:
--------------------
-
-1. **Environment Variable Management**
-   - Loads and validates environment variables from .env file
-   - Provides config schema with types, defaults, and required flags
-   - Validates env var types and values (boolean, int, string)
-   - Fails early with clear error messages for invalid config
-
-2. **Vector Store Initialization**
-   - Initializes ChromaDB for persistent storage (if configured)
-   - Falls back to InMemoryVectorStore if ChromaDB unavailable
-   - Configurable via CHROMA_PATH env var
-   - Handles initialization errors gracefully
-
-3. **Metrics Exporter Setup**
-   - Initializes Prometheus metrics exporter
-   - Handles port conflicts gracefully
-   - Provides METRICS_ENABLED flag for conditional metrics tracking
-
-4. **Document Loading**
-   - Provides sample document initialization (fallback)
-   - Supports dynamic document loading from files/database (extensible)
-   - Loads documents into vector store for RAG operations
-
-5. **RAG Prompt Template**
-   - Creates standardized prompt template for RAG operations
-   - Ensures consistent prompt format across the system
-
-Configuration Variables:
-----------------------
-
-Environment variables (see CONFIG_SCHEMA for complete list):
-- USE_CHROMA: Enable ChromaDB persistence (bool, default: false)
-- CHROMA_PATH: Path for ChromaDB storage (str, default: ./chroma_db)
-- METRICS_PORT: Port for metrics exporter (int, default: 8080)
-- BASETEN_MODEL_ID: BaseTen model ID for embeddings (str, optional)
-- BASETEN_API_KEY: BaseTen API key for embeddings (str, optional)
-
-Usage:
-------
-
-    from src.sec_agent.config import (
-        initialize_vector_store,
-        initialize_sample_documents,
-        create_rag_prompt_template,
-        validate_env_vars,
-        CONFIG_SCHEMA
-    )
-
-    # Validate configuration before use
-    validate_env_vars()
-
-    # Initialize components
-    embeddings = MockEmbeddings()
-    vector_store = initialize_vector_store(embeddings)
-    initialize_sample_documents(vector_store)
-    template = create_rag_prompt_template()
-
-
-Author: VecSec Labs
-License: For authorized security testing and research only.
+Simple, focused configuration module that:
+1. Loads and validates environment variables
+2. Selects vector store (Cloud ChromaDB > Local ChromaDB > InMemory)
+3. Configures logging
+4. Configures metrics (optional)
 """
+
+from __future__ import annotations
 
 import logging
 import os
@@ -80,64 +20,43 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Try to import ChromaDB for persistent storage
-try:
-    from langchain_chroma import Chroma
-
-    CHROMA_AVAILABLE = True
-except ImportError:
-    print("⚠️  langchain-chroma not installed, using InMemory storage")
-    CHROMA_AVAILABLE = False
-
-# Import Document first (needed for fallback) - imports after try/except for ChromaDB
-from langchain_core.documents import Document  # noqa: E402
-from langchain_core.prompts import ChatPromptTemplate  # noqa: E402
-
-# Try to import InMemoryVectorStore (available in langchain-core >= 0.2.0)
-# For older versions (0.1.x), we need to use a fallback
-try:
-    from langchain_core.vectorstores import InMemoryVectorStore
-except ImportError:
-    # Fallback for older versions - try alternative locations
-    try:
-        from langchain.vectorstores import InMemoryVectorStore
-    except ImportError:
-        try:
-            from langchain_core.vectorstores.in_memory import InMemoryVectorStore
-        except ImportError:
-            # Last resort - create a simple fallback that mimics the interface
-            class InMemoryVectorStoreFallback:  # type: ignore[no-redef]
-                """Fallback InMemoryVectorStore for older langchain-core versions"""
-
-                def __init__(self, embeddings):
-                    self.embeddings = embeddings
-                    self.documents: list[Document] = []
-
-                def add_documents(self, docs: list[Document]):
-                    """Add documents to the store"""
-                    self.documents.extend(docs)
-
-                def similarity_search(self, query: str, k: int = 4) -> list[Document]:
-                    """Simple similarity search - returns first k documents"""
-                    # For old versions without proper similarity, just return first k
-                    return self.documents[:k]
-
 # ============================================================================
-# Configuration Schema
+# Section 1: Load + Validate Environment Variables
 # ============================================================================
 
 CONFIG_SCHEMA: dict[str, dict[str, Any]] = {
+    # Required variables (if any)
+    # Add here if needed
+    # Optional variables
     "USE_CHROMA": {
         "type": bool,
         "required": False,
         "default": False,
-        "description": "Enable ChromaDB for persistent vector storage",
+        "description": "Enable local ChromaDB for persistent vector storage",
     },
     "CHROMA_PATH": {
         "type": str,
         "required": False,
         "default": "./chroma_db",
-        "description": "Directory path for ChromaDB persistence",
+        "description": "Directory path for local ChromaDB persistence",
+    },
+    "CHROMA_API_KEY": {
+        "type": str,
+        "required": False,
+        "default": None,
+        "description": "ChromaDB Cloud API key (enables cloud mode)",
+    },
+    "CHROMA_TENANT": {
+        "type": str,
+        "required": False,
+        "default": None,
+        "description": "ChromaDB Cloud tenant ID",
+    },
+    "CHROMA_DATABASE": {
+        "type": str,
+        "required": False,
+        "default": None,
+        "description": "ChromaDB Cloud database name",
     },
     "METRICS_PORT": {
         "type": int,
@@ -145,27 +64,28 @@ CONFIG_SCHEMA: dict[str, dict[str, Any]] = {
         "default": 8080,
         "description": "Port for Prometheus metrics exporter",
     },
-    "BASETEN_MODEL_ID": {
+    "LOG_FILE": {
         "type": str,
         "required": False,
         "default": None,
-        "description": "BaseTen model ID for embeddings",
+        "description": "Path to log file",
     },
-    "BASETEN_API_KEY": {
+    "LOG_LEVEL": {
         "type": str,
         "required": False,
-        "default": None,
-        "description": "BaseTen API key for embeddings",
+        "default": "INFO",
+        "description": "Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
+    },
+    "LOG_TO_CONSOLE": {
+        "type": bool,
+        "required": False,
+        "default": True,
+        "description": "Whether to log to console",
     },
 }
 
 
-# ============================================================================
-# Environment Variable Validation
-# ============================================================================
-
-
-def _parse_bool(value: str) -> bool:
+def _parse_bool(value: str | bool) -> bool:
     """Parse boolean from string (handles 'true', 'false', '1', '0', etc.)"""
     if isinstance(value, bool):
         return value
@@ -174,7 +94,7 @@ def _parse_bool(value: str) -> bool:
     return False
 
 
-def _parse_int(value: str) -> int:
+def _parse_int(value: str | int) -> int:
     """Parse integer from string"""
     if isinstance(value, int):
         return value
@@ -192,7 +112,6 @@ def validate_env_vars() -> None:
 
     Raises:
         ValueError: If any env var has invalid type or value
-        FileNotFoundError: If required path doesn't exist and can't be created
     """
     errors = []
 
@@ -210,14 +129,12 @@ def validate_env_vars() -> None:
 
         try:
             if expected_type is bool:
-                # Validate boolean - must be 'true' or 'false'
                 if env_value.lower() not in ("true", "false", "1", "0", "yes", "no", "on", "off"):
                     errors.append(
                         f"Invalid boolean value for '{var_name}': '{env_value}'. "
                         "Expected 'true' or 'false'"
                     )
             elif expected_type is int:
-                # Validate integer
                 try:
                     int(env_value)
                 except ValueError:
@@ -226,24 +143,10 @@ def validate_env_vars() -> None:
                         "Expected a valid integer"
                     )
             elif expected_type is str:
-                # String validation - check if empty when required
                 if schema.get("required", False) and not env_value:
                     errors.append(f"Required string '{var_name}' cannot be empty")
         except Exception as e:
             errors.append(f"Validation error for '{var_name}': {e}")
-
-    # Validate CHROMA_PATH if set
-    chroma_path = os.getenv("CHROMA_PATH", CONFIG_SCHEMA["CHROMA_PATH"]["default"])
-    if chroma_path:
-        path = Path(chroma_path)
-        # Check if path exists or can be created
-        if not path.exists():
-            try:
-                path.parent.mkdir(parents=True, exist_ok=True)
-            except Exception as e:
-                errors.append(
-                    f"CHROMA_PATH '{chroma_path}' does not exist and cannot be created: {e}"
-                )
 
     if errors:
         error_msg = "Configuration validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
@@ -251,50 +154,145 @@ def validate_env_vars() -> None:
 
 
 # ============================================================================
-# Metrics Initialization (Refactored - CONFIG-003)
+# Section 2: Vector Store Selector (The Key Logic)
 # ============================================================================
 
+# Try to import ChromaDB
+try:
+    import chromadb
+    from langchain_chroma import Chroma
 
-def _initialize_metrics() -> bool:
+    CHROMA_AVAILABLE = True
+except ImportError:
+    CHROMA_AVAILABLE = False
+    chromadb = None  # type: ignore
+    Chroma = None  # type: ignore
+
+# Try to import InMemoryVectorStore
+try:
+    from langchain_core.vectorstores import InMemoryVectorStore
+except ImportError:
+    # Fallback - create simple in-memory store
+    from langchain_core.documents import Document
+
+    class InMemoryVectorStore:  # type: ignore
+        """Simple in-memory vector store fallback"""
+
+        def __init__(self, embedding_function):
+            self.embedding_function = embedding_function
+            self.documents: list[Document] = []
+
+        def add_documents(self, docs: list[Document]):
+            """Add documents to the store"""
+            self.documents.extend(docs)
+
+        def similarity_search(self, query: str, k: int = 4) -> list[Document]:
+            """Simple similarity search - returns first k documents"""
+            return self.documents[:k]
+
+        def add_texts(self, texts: list[str], metadatas: list[dict] | None = None):
+            """Add texts to the store"""
+            metadatas_list = metadatas or [{}] * len(texts)
+            docs = [
+                Document(page_content=text, metadata=meta or {})
+                for text, meta in zip(texts, metadatas_list, strict=True)
+            ]
+            self.documents.extend(docs)
+
+
+def _create_chroma_cloud_client():
     """
-    Initialize metrics exporter with centralized error handling.
+    Create ChromaDB Cloud client using the working pattern from test_chroma_cloud.py
 
     Returns:
-        bool: True if metrics enabled, False otherwise
+        ChromaDB CloudClient instance or None if credentials missing/failed
     """
+    if not CHROMA_AVAILABLE:
+        return None
+
+    # Get credentials from .env (same pattern as test_chroma_cloud.py)
+    chroma_api_key = os.getenv("CHROMA_API_KEY")
+    chroma_tenant = os.getenv("CHROMA_TENANT")
+    chroma_database = os.getenv("CHROMA_DATABASE")
+
+    # Check if all cloud credentials are present
+    if not chroma_api_key or not chroma_tenant or not chroma_database:
+        return None
+
     try:
-        from src.metrics_exporter import (
-            metrics_exporter as metrics_exporter_instance,  # type: ignore[no-redef]
+        # Use the exact same pattern as test_chroma_cloud.py
+        client = chromadb.CloudClient(
+            api_key=chroma_api_key, tenant=chroma_tenant, database=chroma_database
         )
-
-        metrics_exporter_instance.start_server()
-        return True
-    except ImportError:
-        # Fallback to same directory import
-        try:
-            from metrics_exporter import (
-                metrics_exporter as metrics_exporter_instance,  # type: ignore[no-redef]
-            )
-
-            metrics_exporter_instance.start_server()
-            return True
-        except ImportError:
-            print("⚠️  metrics_exporter not available")
-            return False
-        except Exception as e:
-            print(f"⚠️  Could not start metrics exporter: {e}")
-            return False
+        print(f"☁️  Using ChromaDB Cloud (tenant: {chroma_tenant}, database: {chroma_database})")
+        return client
     except Exception as e:
-        print(f"⚠️  Could not start metrics exporter: {e}")
-        return False
+        print(f"⚠️  ChromaDB Cloud connection failed: {e}")
+        return None
 
 
-# Initialize metrics exporter
-METRICS_ENABLED = _initialize_metrics()
+def initialize_vector_store(embeddings):
+    """
+    Initialize vector store based on configuration.
+
+    Priority:
+    1. ChromaDB Cloud (if CHROMA_API_KEY, CHROMA_TENANT, CHROMA_DATABASE are set)
+    2. Local ChromaDB (if USE_CHROMA=true)
+    3. InMemoryVectorStore (fallback)
+
+    Args:
+        embeddings: Embedding function compatible with LangChain vector stores
+
+    Returns:
+        Vector store instance (Chroma or InMemoryVectorStore)
+    """
+    # Priority 1: Try ChromaDB Cloud first
+    if CHROMA_AVAILABLE:
+        cloud_client = _create_chroma_cloud_client()
+        if cloud_client:
+            try:
+                # Wrap cloud client in LangChain Chroma with embedding function
+                vector_store = Chroma(
+                    client=cloud_client,
+                    collection_name="vecsec_documents",
+                    embedding_function=embeddings,
+                )
+                print("✅ Using ChromaDB Cloud for vector storage")
+                return vector_store
+            except Exception as e:
+                print(f"⚠️  ChromaDB Cloud initialization failed: {e}, trying local...")
+                # Fall through to local ChromaDB
+
+    # Priority 2: Try local ChromaDB if USE_CHROMA is enabled
+    use_chroma = _parse_bool(os.getenv("USE_CHROMA", str(CONFIG_SCHEMA["USE_CHROMA"]["default"])))
+
+    if CHROMA_AVAILABLE and use_chroma:
+        try:
+            persist_directory = os.getenv("CHROMA_PATH", CONFIG_SCHEMA["CHROMA_PATH"]["default"])
+
+            # Ensure directory exists or can be created
+            path = Path(persist_directory)
+            if not path.exists():
+                path.mkdir(parents=True, exist_ok=True)
+
+            vector_store = Chroma(
+                collection_name="vecsec_documents",
+                embedding_function=embeddings,
+                persist_directory=persist_directory,
+            )
+            print(f"✅ Using ChromaDB for persistent vector storage at: {persist_directory}")
+            return vector_store
+        except Exception as e:
+            print(f"⚠️  ChromaDB initialization failed: {e}, using InMemory")
+            return InMemoryVectorStore(embeddings)
+
+    # Priority 3: Fallback to InMemoryVectorStore
+    print("💾 Using InMemoryVectorStore (no persistence)")
+    return InMemoryVectorStore(embeddings)
 
 
 # ============================================================================
-# Logging Configuration
+# Section 3: Logging Configuration
 # ============================================================================
 
 
@@ -308,9 +306,6 @@ def setup_logging(
         log_file: Path to log file (default: None, logs to console only)
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         log_to_console: Whether to also log to console (default: True)
-
-    Example:
-        setup_logging(log_file="vecsec.log", log_level="DEBUG")
     """
     # Convert string level to logging constant
     level_map = {
@@ -356,169 +351,84 @@ def setup_logging(
     )
 
 
-# Auto-configure logging if LOG_FILE or LOG_TO_CONSOLE env vars are set
-# Only auto-configure if logging hasn't been set up yet
+# Auto-configure logging if env vars are set
 if not logging.getLogger().handlers:
     _log_file = os.getenv("LOG_FILE")
     _log_level = os.getenv("LOG_LEVEL", "INFO")
     _log_to_console = _parse_bool(os.getenv("LOG_TO_CONSOLE", "true"))
 
-    # If LOG_FILE is set OR LOG_TO_CONSOLE is true, configure logging
     if _log_file or _log_to_console:
         setup_logging(log_file=_log_file, log_level=_log_level, log_to_console=_log_to_console)
 
 
 # ============================================================================
-# Vector Store Initialization
+# Section 4: Metrics Configuration (Optional)
 # ============================================================================
 
 
-def initialize_vector_store(embeddings):
+def _initialize_metrics() -> bool:
     """
-    Initialize vector store (ChromaDB or InMemory) based on configuration.
-
-    Uses CHROMA_PATH env var if set, otherwise defaults to './chroma_db'.
-    Falls back to InMemoryVectorStore if ChromaDB is unavailable or fails.
-
-    Args:
-        embeddings: Embedding function compatible with LangChain vector stores
+    Initialize metrics exporter with centralized error handling.
 
     Returns:
-        Vector store instance (Chroma or InMemoryVectorStore)
+        bool: True if metrics enabled, False otherwise
     """
-    # Check if ChromaDB should be used (CONFIG-002: Read from env var)
-    use_chroma = _parse_bool(os.getenv("USE_CHROMA", str(CONFIG_SCHEMA["USE_CHROMA"]["default"])))
+    try:
+        from src.metrics_exporter import (
+            metrics_exporter as metrics_exporter_instance,  # type: ignore[no-redef]
+        )
 
-    if CHROMA_AVAILABLE and use_chroma:
+        metrics_exporter_instance.start_server()
+        return True
+    except ImportError:
+        # Fallback to same directory import
         try:
-            # Use configurable path (CONFIG-002 fix)
-            persist_directory = os.getenv("CHROMA_PATH", CONFIG_SCHEMA["CHROMA_PATH"]["default"])
-
-            # Ensure directory exists or can be created
-            path = Path(persist_directory)
-            if not path.exists():
-                path.mkdir(parents=True, exist_ok=True)
-
-            vector_store = Chroma(
-                collection_name="vecsec_documents",
-                embedding_function=embeddings,
-                persist_directory=persist_directory,
+            from metrics_exporter import (
+                metrics_exporter as metrics_exporter_instance,  # type: ignore[no-redef]
             )
-            print(f"✅ Using ChromaDB for persistent vector storage at: {persist_directory}")
-            return vector_store
+
+            metrics_exporter_instance.start_server()
+            return True
+        except ImportError:
+            print("⚠️  metrics_exporter not available")
+            return False
         except Exception as e:
-            print(f"⚠️  ChromaDB initialization failed: {e}, using InMemory")
-            if "InMemoryVectorStoreFallback" in globals():
-                return InMemoryVectorStoreFallback(embeddings)  # type: ignore[call-overload]
-            return InMemoryVectorStore(embeddings)
-    else:
-        if "InMemoryVectorStoreFallback" in globals():
-            return InMemoryVectorStoreFallback(embeddings)  # type: ignore[call-overload]
-        return InMemoryVectorStore(embeddings)
+            print(f"⚠️  Could not start metrics exporter: {e}")
+            return False
+    except Exception as e:
+        print(f"⚠️  Could not start metrics exporter: {e}")
+        return False
+
+
+# Initialize metrics exporter
+METRICS_ENABLED = _initialize_metrics()
 
 
 # ============================================================================
-# Document Loading
+# Compatibility Stubs (for existing code - should be moved elsewhere)
 # ============================================================================
 
 
 def initialize_sample_documents(vector_store) -> None:
     """
-    Add sample documents to the vector store (fallback/default).
+    Stub function for compatibility.
 
-    This is a static document loader for demo/testing purposes.
-    For production, use load_documents_from_file() or load_documents_from_db().
-
-    Args:
-        vector_store: Vector store instance to add documents to
+    Note: This should be moved to a separate document loading module.
     """
-    sample_docs = [
-        Document(
-            page_content="RAG (Retrieval-Augmented Generation) is a technique that combines information retrieval with text generation to produce more accurate and contextually relevant responses."
-        ),
-        Document(
-            page_content="LangChain is a framework for developing applications powered by language models. It provides tools for building RAG applications."
-        ),
-        Document(
-            page_content="Vector stores are databases that store and retrieve documents based on semantic similarity using embeddings."
-        ),
-        Document(
-            page_content="Embeddings are dense vector representations of text that capture semantic meaning and enable similarity search."
-        ),
-    ]
-    vector_store.add_documents(sample_docs)
+    # Minimal implementation - just a placeholder
+    print("⚠️  initialize_sample_documents() is a stub - implement document loading elsewhere")
+    pass
 
 
-def load_documents_from_file(file_path: str, tenant_id: str | None = None) -> list[Document]:
+def create_rag_prompt_template():
     """
-    Load documents from a file (JSON, YAML, or text).
+    Stub function for compatibility.
 
-    This function provides dynamic document loading as an alternative to
-    static sample documents. Supports tenant-specific document loading.
-
-    Args:
-        file_path: Path to document file (supports .json, .yaml, .txt)
-        tenant_id: Optional tenant ID for filtering documents
-
-    Returns:
-        List of Document objects
-
-    Raises:
-        FileNotFoundError: If file doesn't exist
-        ValueError: If file format is unsupported
-
-    Note: This is a placeholder for CONFIG-004. Full implementation pending.
+    Note: This should be moved to a separate RAG/prompt module.
     """
-    path = Path(file_path)
+    from langchain_core.prompts import ChatPromptTemplate
 
-    if not path.exists():
-        raise FileNotFoundError(f"Document file not found: {file_path}")
-
-    # TODO: Implement JSON/YAML/TXT parsing
-    # For now, return empty list as placeholder
-    print("⚠️  load_documents_from_file() not yet implemented (CONFIG-004)")
-    return []
-
-
-def load_documents_from_db(query: str, tenant_id: str | None = None) -> list[Document]:
-    """
-    Load documents from a database query.
-
-    This function provides database-backed document loading as an alternative to
-    static sample documents. Supports tenant-specific filtering.
-
-    Args:
-        query: Database query string or SQL
-        tenant_id: Optional tenant ID for filtering documents
-
-    Returns:
-        List of Document objects
-
-    Raises:
-        NotImplementedError: Database loading not yet implemented
-
-    Note: This is a placeholder for CONFIG-004. Full implementation pending.
-    """
-    # TODO: Implement database query execution
-    # For now, raise NotImplementedError
-    raise NotImplementedError(
-        "load_documents_from_db() not yet implemented (CONFIG-004). "
-        "Use initialize_sample_documents() as fallback."
-    )
-
-
-# ============================================================================
-# RAG Prompt Template
-# ============================================================================
-
-
-def create_rag_prompt_template() -> ChatPromptTemplate:
-    """
-    Create RAG prompt template for consistent prompt formatting.
-
-    Returns:
-        ChatPromptTemplate instance with context and question placeholders
-    """
+    # Minimal implementation - return basic template
     return ChatPromptTemplate.from_template("""
 Use the following pieces of context to answer the question at the end.
 If you don't know the answer, just say that you don't know, don't try to make up an answer.
@@ -530,81 +440,3 @@ Question: {question}
 
 Answer:
 """)
-
-
-# ============================================================================
-# Module Initialization
-# ============================================================================
-
-# Validate configuration on module import (optional - can be called explicitly)
-# Uncomment below to enable auto-validation:
-# try:
-#     validate_env_vars()
-# except ValueError as e:
-#     print(f"⚠️  Configuration validation warning: {e}")
-#     print("⚠️  Continuing with defaults - fix config for production!")
-
-# ============================================================================
-# Sample Documents with Metadata
-# ============================================================================
-
-
-def initialize_sample_documents_with_metadata(vector_store) -> None:
-    """
-    Add sample documents with proper metadata for tenant isolation
-
-    Note: ChromaDB only accepts scalar metadata values (str, int, float, bool).
-    Lists are converted to comma-separated strings for storage.
-    """
-    documents = [
-        {
-            "content": "RAG (Retrieval-Augmented Generation) combines retrieval with generation.",
-            "metadata": {
-                "embedding_id": "emb-rag-001",
-                "document_id": "doc-rag-001",
-                "tenant_id": "default_tenant",
-                "sensitivity": "INTERNAL",
-                "topics": ["rag", "ai", "retrieval"],  # Will be converted to string
-            },
-        },
-        {
-            "content": "Vector stores enable semantic similarity search using embeddings.",
-            "metadata": {
-                "embedding_id": "emb-vec-001",
-                "document_id": "doc-vec-001",
-                "tenant_id": "default_tenant",
-                "sensitivity": "PUBLIC",
-                "topics": ["vectors", "embeddings", "search"],  # Will be converted to string
-            },
-        },
-        # Add more documents with different tenants for testing
-        {
-            "content": "Classified information about security protocols.",
-            "metadata": {
-                "embedding_id": "emb-sec-001",
-                "document_id": "doc-sec-001",
-                "tenant_id": "security_tenant",
-                "sensitivity": "CLASSIFIED",
-                "topics": ["security", "classified"],  # Will be converted to string
-            },
-        },
-    ]
-
-    # Convert metadata to ChromaDB-compatible format (lists -> comma-separated strings)
-    chromadb_metadatas = []
-    for doc in documents:
-        metadata = dict(doc["metadata"])  # Convert to dict to avoid Collection.copy() issue
-        # Convert list values to comma-separated strings for ChromaDB
-        for key, value in metadata.items():
-            if isinstance(value, list):
-                metadata[key] = ",".join(
-                    str(v) for v in value
-                )  # Convert list to comma-separated string
-            elif not isinstance(value, (str, int, float, bool)):
-                metadata[key] = str(value)  # Convert other non-scalar types to string
-        chromadb_metadatas.append(metadata)
-
-    # Add to ChromaDB
-    vector_store.add_texts(
-        texts=[doc["content"] for doc in documents], metadatas=chromadb_metadatas
-    )

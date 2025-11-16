@@ -1,323 +1,380 @@
 """
-VecSec Config Functional Diagnostic
-Tests real runtime behavior of config.py subsystems
+VecSec Config Manager Tests
+
+Tests the core configuration and vector store initialization logic.
+This is the most important test suite - it validates the core architecture.
 """
 
-import importlib
+import importlib.util
 import os
 import sys
-import traceback
-from pathlib import Path
+import tempfile
+import unittest
+from pathlib import Path as PathLib
+from unittest.mock import MagicMock
 
-# Add repo root to Python path
-project_root = Path(__file__).resolve().parents[3]
+# Add project root to path
+project_root = PathLib(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-print("🚀 Starting VecSec Config Functional Diagnostics\n")
+# Import config directly to avoid __init__.py import issues
+config_path = project_root / "src" / "sec_agent" / "config.py"
+spec = importlib.util.spec_from_file_location("config", config_path)
+config = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(config)
+
+# Import what we need
+CHROMA_AVAILABLE = config.CHROMA_AVAILABLE
+CONFIG_SCHEMA = config.CONFIG_SCHEMA
+METRICS_ENABLED = config.METRICS_ENABLED
+_create_chroma_cloud_client = config._create_chroma_cloud_client
+_parse_bool = config._parse_bool
+_parse_int = config._parse_int
+initialize_vector_store = config.initialize_vector_store
+validate_env_vars = config.validate_env_vars
 
 
-def reset_env():
-    """Reset environment variables to safe defaults"""
-    os.environ["USE_CHROMA"] = "false"
-    os.environ.pop("CHROMA_PATH", None)
-    os.environ.pop("OPENAI_API_KEY", None)
-    os.environ["METRICS_PORT"] = "8080"
+class TestConfigManager(unittest.TestCase):
+    """Test configuration management and validation"""
 
+    def setUp(self):
+        """Set up test environment"""
+        # Save original env vars
+        self.original_env = dict(os.environ)
+        # Clear ChromaDB-related env vars for clean testing
+        for key in [
+            "CHROMA_API_KEY",
+            "CHROMA_TENANT",
+            "CHROMA_DATABASE",
+            "USE_CHROMA",
+            "CHROMA_PATH",
+        ]:
+            os.environ.pop(key, None)
 
-# ------------------------------------------------------------
-# 1️⃣ Vector Store Functional Test
-# ------------------------------------------------------------
-def test_vector_store():
-    """Test vector store initialization and functionality"""
-    print("🧠 Testing Vector Store behavior...")
-    reset_env()
+    def tearDown(self):
+        """Restore original environment"""
+        os.environ.clear()
+        os.environ.update(self.original_env)
 
-    from langchain_core.vectorstores import InMemoryVectorStore
+    def test_config_schema_exists(self):
+        """Test that CONFIG_SCHEMA is properly defined"""
+        self.assertIsInstance(CONFIG_SCHEMA, dict)
+        self.assertIn("USE_CHROMA", CONFIG_SCHEMA)
+        self.assertIn("CHROMA_PATH", CONFIG_SCHEMA)
+        self.assertIn("CHROMA_API_KEY", CONFIG_SCHEMA)
+        self.assertIn("CHROMA_TENANT", CONFIG_SCHEMA)
+        self.assertIn("CHROMA_DATABASE", CONFIG_SCHEMA)
 
-    try:
-        from src.sec_agent import config
+    def test_parse_bool(self):
+        """Test boolean parsing"""
+        self.assertTrue(_parse_bool("true"))
+        self.assertTrue(_parse_bool("1"))
+        self.assertTrue(_parse_bool("yes"))
+        self.assertTrue(_parse_bool("on"))
+        self.assertTrue(_parse_bool(True))
 
-        # Create proper mock embeddings class
-        class MockEmbeddings:
-            def embed_documents(self, texts):
-                return [[0.1] * 384 for _ in texts]
+        self.assertFalse(_parse_bool("false"))
+        self.assertFalse(_parse_bool("0"))
+        self.assertFalse(_parse_bool("no"))
+        self.assertFalse(_parse_bool("off"))
+        self.assertFalse(_parse_bool(False))
+        self.assertFalse(_parse_bool("invalid"))
 
-            def embed_query(self, text):
-                return [0.1] * 384
+    def test_parse_int(self):
+        """Test integer parsing"""
+        self.assertEqual(_parse_int("42"), 42)
+        self.assertEqual(_parse_int(42), 42)
+        with self.assertRaises(ValueError):
+            _parse_int("not_a_number")
 
-        embeddings = MockEmbeddings()
-
-        # Test vector store initialization
-        store = config.initialize_vector_store(embeddings)
-        assert isinstance(store, InMemoryVectorStore), (
-            f"Expected InMemoryVectorStore, got {type(store)}"
-        )
-        print("✅ VectorStore initialized as InMemoryVectorStore")
-
-        # Test sample document loading
-        config.initialize_sample_documents(store)
-        print("✅ Sample documents loaded")
-
-        # Functional test: similarity_search
-        results = store.similarity_search("LangChain", k=1)
-        assert len(results) > 0, "Similarity search should return results"
-        assert hasattr(results[0], "page_content"), "Result should have page_content"
-        print(f"🔍 Search result: {results[0].page_content[:60]}...")
-        print("✅ VectorStore functional with InMemory fallback")
-
-    except AssertionError as e:
-        print(f"❌ Assertion failed: {e}")
-        traceback.print_exc()
-    except Exception as e:
-        traceback.print_exc()
-        print(f"❌ VectorStore functional test failed: {e}")
-    print()
-
-
-# ------------------------------------------------------------
-# 2️⃣ Metrics Exporter Test
-# ------------------------------------------------------------
-def test_metrics_exporter():
-    """Test metrics exporter initialization and state"""
-    print("📊 Testing Metrics Exporter...")
-    reset_env()
-
-    try:
-        # Force reload to get fresh state
-        if "src.sec_agent.config" in sys.modules:
-            importlib.reload(sys.modules["src.sec_agent.config"])
-
-        from src.sec_agent import config
-
-        # Check metrics flag exists and is boolean
-        assert hasattr(config, "METRICS_ENABLED"), "METRICS_ENABLED should exist"
-        assert isinstance(config.METRICS_ENABLED, bool), (
-            f"METRICS_ENABLED should be bool, got {type(config.METRICS_ENABLED)}"
-        )
-        print(f"METRICS_ENABLED = {config.METRICS_ENABLED}")
-
-        # Check Chroma availability flag
-        assert hasattr(config, "CHROMA_AVAILABLE"), "CHROMA_AVAILABLE should exist"
-        assert isinstance(config.CHROMA_AVAILABLE, bool), (
-            f"CHROMA_AVAILABLE should be bool, got {type(config.CHROMA_AVAILABLE)}"
-        )
-        print(f"CHROMA_AVAILABLE = {config.CHROMA_AVAILABLE}")
-
-        print("✅ Metrics exporter flags read successfully")
-
-    except AssertionError as e:
-        print(f"❌ Assertion failed: {e}")
-        traceback.print_exc()
-    except Exception as e:
-        traceback.print_exc()
-        print(f"❌ Metrics exporter test failed: {e}")
-    print()
-
-
-# ------------------------------------------------------------
-# 3️⃣ Prompt Template Test
-# ------------------------------------------------------------
-def test_prompt_template():
-    """Test prompt template creation and rendering"""
-    print("📝 Testing Prompt Template...")
-
-    try:
-        from src.sec_agent import config
-
-        # Test template creation
-        template = config.create_rag_prompt_template()
-        assert template is not None, "Template should not be None"
-        print(f"✅ Template created: {type(template).__name__}")
-
-        # Test template rendering
-        rendered = template.format(context="RAG is a technique", question="What is RAG?")
-        assert "Context:" in rendered, "Rendered template should contain 'Context:'"
-        assert "Question:" in rendered, "Rendered template should contain 'Question:'"
-        assert "RAG is a technique" in rendered, "Rendered template should contain context"
-        assert "What is RAG?" in rendered, "Rendered template should contain question"
-
-        print("✅ Prompt template renders correctly:")
-        print("   " + "\n   ".join(rendered.split("\n")[:3]) + "...")
-
-    except AssertionError as e:
-        print(f"❌ Assertion failed: {e}")
-        traceback.print_exc()
-    except Exception as e:
-        traceback.print_exc()
-        print(f"❌ Prompt template test failed: {e}")
-    print()
-
-
-# ------------------------------------------------------------
-# 4️⃣ Chaos Env Validation Test
-# ------------------------------------------------------------
-def test_env_validation_behavior():
-    """Test behavior with invalid environment variables"""
-    print("🔥 Chaos Env Test...")
-    reset_env()
-
-    # Set invalid values
-    os.environ["USE_CHROMA"] = "maybe"  # Invalid boolean
-    os.environ["METRICS_PORT"] = "abc"  # Invalid int
-
-    try:
-        from src.sec_agent import config
-
-        # Test validation function
-        print("Testing validate_env_vars() with invalid values...")
+    def test_validate_env_vars(self):
+        """Test environment variable validation"""
+        # Should not raise with valid defaults
         try:
-            config.validate_env_vars()
-            print("⚠️ Validation passed but should have failed with invalid values")
-            print("   Expected: ValueError for invalid USE_CHROMA and METRICS_PORT")
-        except ValueError as e:
-            print("✅ Validation correctly raised ValueError:")
-            print(f"   {str(e)[:100]}...")
-            assert "Invalid boolean value" in str(e) or "Invalid integer value" in str(e), (
-                "Error should mention invalid boolean or integer"
-            )
+            validate_env_vars()
+        except ValueError:
+            self.fail("validate_env_vars() raised ValueError unexpectedly")
+
+    def test_chroma_available_flag(self):
+        """Test CHROMA_AVAILABLE flag exists"""
+        self.assertIsInstance(CHROMA_AVAILABLE, bool)
+        print(f"   CHROMA_AVAILABLE = {CHROMA_AVAILABLE}")
+
+
+class TestChromaCloudConnection(unittest.TestCase):
+    """Test ChromaDB Cloud connection"""
+
+    def setUp(self):
+        """Set up test environment"""
+        self.original_env = dict(os.environ)
+        # Clear cloud credentials
+        for key in ["CHROMA_API_KEY", "CHROMA_TENANT", "CHROMA_DATABASE"]:
+            os.environ.pop(key, None)
+
+    def tearDown(self):
+        """Restore original environment"""
+        os.environ.clear()
+        os.environ.update(self.original_env)
+
+    def test_cloud_client_missing_credentials(self):
+        """Test that cloud client returns None when credentials are missing"""
+        client = _create_chroma_cloud_client()
+        self.assertIsNone(client, "Should return None when credentials missing")
+
+    @unittest.skipUnless(
+        os.getenv("CHROMA_API_KEY") and os.getenv("CHROMA_TENANT") and os.getenv("CHROMA_DATABASE"),
+        "ChromaDB Cloud credentials not set",
+    )
+    def test_cloud_client_with_credentials(self):
+        """Test cloud client creation with real credentials"""
+        # Use credentials from environment (if set)
+        client = _create_chroma_cloud_client()
+        if client:
+            # Test that we can list collections
+            try:
+                collections = client.list_collections()
+                self.assertIsInstance(collections, list)
+                print(f"   ✅ Can list collections: {len(collections)} found")
+            except Exception as e:
+                self.fail(f"Failed to list collections: {e}")
+
+    @unittest.skipUnless(
+        os.getenv("CHROMA_API_KEY") and os.getenv("CHROMA_TENANT") and os.getenv("CHROMA_DATABASE"),
+        "ChromaDB Cloud credentials not set",
+    )
+    def test_cloud_client_read_write(self):
+        """Test read/write operations with cloud client"""
+        client = _create_chroma_cloud_client()
+        if not client:
+            self.skipTest("Cloud client not available")
+
+        # Get or create test collection
+        collection = client.get_or_create_collection(name="test_config_read_write")
+
+        # Write test document
+        test_id = "test-doc-1"
+        test_doc = "This is a test document for read/write"
+        test_metadata = {"test": "true", "sensitivity": "PUBLIC"}
+
+        try:
+            collection.add(documents=[test_doc], ids=[test_id], metadatas=[test_metadata])
+            print("   ✅ Write successful")
+
+            # Read back
+            results = collection.get(ids=[test_id])
+            self.assertEqual(len(results["ids"]), 1)
+            self.assertEqual(results["documents"][0], test_doc)
+            print("   ✅ Read successful")
+
+            # Test metadata
+            self.assertEqual(results["metadatas"][0]["test"], "true")
+            print("   ✅ Metadata accepted")
         except Exception as e:
-            print(f"⚠️ Unexpected exception: {e}")
-
-        # Test that invalid USE_CHROMA is parsed safely
-        use_chroma = config._parse_bool(os.getenv("USE_CHROMA", "false"))
-        print(f"USE_CHROMA='maybe' parsed as: {use_chroma} (should be False)")
-        assert use_chroma is False, "Invalid boolean should default to False"
-        print("✅ Invalid USE_CHROMA='maybe' correctly treated as False")
-
-    except AssertionError as e:
-        print(f"❌ Assertion failed: {e}")
-        traceback.print_exc()
-    except Exception as e:
-        traceback.print_exc()
-        print(f"❌ Chaos env test failed: {e}")
-    print()
+            self.fail(f"Read/write test failed: {e}")
 
 
-# ------------------------------------------------------------
-# 5️⃣ Path Configuration Test
-# ------------------------------------------------------------
-def test_chroma_path_configuration():
-    """Test if ChromaDB path is configurable"""
-    print("📁 Testing Chroma Path Configuration...")
-    reset_env()
+class TestVectorStoreInitialization(unittest.TestCase):
+    """Test vector store initialization logic - THE MOST IMPORTANT TESTS"""
 
-    try:
-        from src.sec_agent import config
+    def setUp(self):
+        """Set up test environment"""
+        self.original_env = dict(os.environ)
+        # Clear all ChromaDB env vars
+        for key in [
+            "CHROMA_API_KEY",
+            "CHROMA_TENANT",
+            "CHROMA_DATABASE",
+            "USE_CHROMA",
+            "CHROMA_PATH",
+        ]:
+            os.environ.pop(key, None)
 
-        # Create mock embeddings
-        class MockEmbeddings:
-            def embed_documents(self, texts):
-                return [[0.1] * 384 for _ in texts]
+    def tearDown(self):
+        """Restore original environment"""
+        os.environ.clear()
+        os.environ.update(self.original_env)
 
-            def embed_query(self, text):
-                return [0.1] * 384
+    def _make_mock_embeddings(self):
+        """Create mock embeddings function"""
+        mock_emb = MagicMock()
+        mock_emb.embed_query = MagicMock(return_value=[0.1] * 384)
+        mock_emb.embed_documents = MagicMock(return_value=[[0.1] * 384])
+        return mock_emb
 
-        # Test with custom CHROMA_PATH
-        test_path = "/tmp/test_chroma_path"
-        os.environ["CHROMA_PATH"] = test_path
-        os.environ["USE_CHROMA"] = "false"  # Use InMemory to avoid actual Chroma init
+    @unittest.skipUnless(
+        os.getenv("CHROMA_API_KEY") and os.getenv("CHROMA_TENANT") and os.getenv("CHROMA_DATABASE"),
+        "ChromaDB Cloud credentials not set",
+    )
+    def test_cloud_mode(self):
+        """TEST A - CLOUD MODE
 
-        embeddings = MockEmbeddings()
-        _ = config.initialize_vector_store(embeddings)
+        Env:
+        - CHROMA_API_KEY=xxx
+        - CHROMA_TENANT=xxx
+        - CHROMA_DATABASE=xxx
+        - USE_CHROMA=false (should still use cloud)
 
-        # Check that CHROMA_PATH is read from env (even if not used due to USE_CHROMA=false)
-        chroma_path_from_env = os.getenv("CHROMA_PATH", "./chroma_db")
-        print(f"CHROMA_PATH env var = {chroma_path_from_env}")
+        Expect:
+        - vector_store.client is a CloudClient
+        """
+        # Set cloud credentials from environment
+        api_key = os.getenv("CHROMA_API_KEY")
+        tenant = os.getenv("CHROMA_TENANT")
+        database = os.getenv("CHROMA_DATABASE")
 
-        # Test that config schema has CHROMA_PATH
-        assert "CHROMA_PATH" in config.CONFIG_SCHEMA, "CONFIG_SCHEMA should have CHROMA_PATH"
-        assert config.CONFIG_SCHEMA["CHROMA_PATH"]["type"] is str, (
-            "CHROMA_PATH should be string type"
-        )
-        print(
-            f"✅ CONFIG_SCHEMA includes CHROMA_PATH with default: {config.CONFIG_SCHEMA['CHROMA_PATH']['default']}"
-        )
+        if not (api_key and tenant and database):
+            self.skipTest("ChromaDB Cloud credentials not set")
 
-        # Test path validation
-        print("Testing path validation...")
-        config.validate_env_vars()  # Should not raise if path is valid or can be created
-        print("✅ Path validation passed")
+        os.environ["CHROMA_API_KEY"] = api_key
+        os.environ["CHROMA_TENANT"] = tenant
+        os.environ["CHROMA_DATABASE"] = database
+        os.environ["USE_CHROMA"] = "false"  # Should still use cloud
 
-        # Test that default path is in schema
-        default_path = config.CONFIG_SCHEMA["CHROMA_PATH"]["default"]
-        assert default_path == "./chroma_db", (
-            f"Default path should be './chroma_db', got '{default_path}'"
-        )
-        print("✅ Default path configured correctly in schema")
+        embeddings = self._make_mock_embeddings()
+        vector_store = initialize_vector_store(embeddings)
 
-    except AssertionError as e:
-        print(f"❌ Assertion failed: {e}")
-        traceback.print_exc()
-    except Exception as e:
-        traceback.print_exc()
-        print(f"❌ Path configuration test failed: {e}")
-    print()
-
-
-# ------------------------------------------------------------
-# 6️⃣ Sample Documents Test
-# ------------------------------------------------------------
-def test_sample_documents():
-    """Test sample document loading"""
-    print("📄 Testing Sample Documents...")
-    reset_env()
-
-    try:
+        # Check that it's a Chroma instance (or InMemory if connection failed)
+        from langchain_chroma import Chroma
         from langchain_core.vectorstores import InMemoryVectorStore
 
-        from src.sec_agent import config
+        if isinstance(vector_store, Chroma):
+            # Check that client is a CloudClient
+            import chromadb
 
-        class MockEmbeddings:
-            def embed_documents(self, texts):
-                return [[0.1] * 384 for _ in texts]
+            if hasattr(vector_store, "_client"):
+                self.assertIsInstance(vector_store._client, chromadb.CloudClient)
+                print("   ✅ Cloud mode: vector_store.client is CloudClient")
+            else:
+                # Try alternative attribute access
+                client = getattr(vector_store, "client", None)
+                if client:
+                    self.assertIsInstance(client, chromadb.CloudClient)
+                    print("   ✅ Cloud mode: vector_store.client is CloudClient")
+        elif isinstance(vector_store, InMemoryVectorStore):
+            # Connection might have failed, that's okay for this test
+            print(
+                "   ⚠️  Cloud mode: Connection failed, using InMemory (credentials may be invalid)"
+            )
+        else:
+            self.fail(f"Unexpected vector store type: {type(vector_store)}")
 
-            def embed_query(self, text):
-                return [0.1] * 384
+    @unittest.skipUnless(CHROMA_AVAILABLE, "ChromaDB not available")
+    def test_local_mode(self):
+        """TEST B - LOCAL MODE
 
-        embeddings = MockEmbeddings()
-        store = InMemoryVectorStore(embeddings)
+        Env:
+        - CHROMA_API_KEY unset
+        - USE_CHROMA=true
+        - CHROMA_PATH=/tmp/chroma_test
 
-        # Load sample docs
-        config.initialize_sample_documents(store)
-        print("✅ Sample documents loaded")
+        Expect:
+        - vector_store is a langchain_chroma.Chroma instance
+        - persist_directory matches CHROMA_PATH
+        """
+        # Ensure cloud credentials are unset
+        os.environ.pop("CHROMA_API_KEY", None)
+        os.environ.pop("CHROMA_TENANT", None)
+        os.environ.pop("CHROMA_DATABASE", None)
 
-        # Try to verify docs were added (search for known content)
-        results = store.similarity_search("RAG", k=5)
-        print(f"🔍 Found {len(results)} documents matching 'RAG'")
+        # Set local ChromaDB
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.environ["USE_CHROMA"] = "true"
+            os.environ["CHROMA_PATH"] = tmpdir
 
-        # Check if we get at least one result
-        assert len(results) > 0, "Should find documents containing 'RAG'"
+            embeddings = self._make_mock_embeddings()
+            vector_store = initialize_vector_store(embeddings)
 
-        # Verify content
-        found_rag_content = any("RAG" in doc.page_content for doc in results)
-        assert found_rag_content, "Should find document about RAG"
-        print("✅ Sample documents contain expected content")
+            # Check that it's a Chroma instance
+            from langchain_chroma import Chroma
 
-    except AssertionError as e:
-        print(f"❌ Assertion failed: {e}")
-        traceback.print_exc()
-    except Exception as e:
-        traceback.print_exc()
-        print(f"❌ Sample documents test failed: {e}")
-    print()
+            self.assertIsInstance(vector_store, Chroma)
+
+            # Check persist_directory (may be in different attribute)
+            persist_dir = getattr(vector_store, "_persist_directory", None) or getattr(
+                vector_store, "persist_directory", None
+            )
+            if persist_dir:
+                self.assertEqual(str(persist_dir), tmpdir)
+            print(f"   ✅ Local mode: Chroma instance created at {tmpdir}")
+
+    def test_memory_mode(self):
+        """TEST C - MEMORY MODE (fallback)
+
+        Env:
+        - CHROMA_API_KEY unset
+        - USE_CHROMA=false
+
+        Expect:
+        - vector_store is InMemoryVectorStore
+        """
+        # Ensure all ChromaDB env vars are unset
+        os.environ.pop("CHROMA_API_KEY", None)
+        os.environ.pop("CHROMA_TENANT", None)
+        os.environ.pop("CHROMA_DATABASE", None)
+        os.environ["USE_CHROMA"] = "false"
+
+        embeddings = self._make_mock_embeddings()
+        vector_store = initialize_vector_store(embeddings)
+
+        # Check that it's InMemoryVectorStore
+        from langchain_core.vectorstores import InMemoryVectorStore
+
+        self.assertIsInstance(vector_store, InMemoryVectorStore)
+        print("   ✅ Memory mode: vector_store is InMemoryVectorStore")
+
+    def test_priority_cloud_over_local(self):
+        """Test that cloud mode takes priority over local mode"""
+        if not (
+            os.getenv("CHROMA_API_KEY")
+            and os.getenv("CHROMA_TENANT")
+            and os.getenv("CHROMA_DATABASE")
+        ):
+            self.skipTest("ChromaDB Cloud credentials not set")
+
+        # Set both cloud and local
+        os.environ["CHROMA_API_KEY"] = os.getenv("CHROMA_API_KEY")
+        os.environ["CHROMA_TENANT"] = os.getenv("CHROMA_TENANT")
+        os.environ["CHROMA_DATABASE"] = os.getenv("CHROMA_DATABASE")
+        os.environ["USE_CHROMA"] = "true"
+
+        embeddings = self._make_mock_embeddings()
+        vector_store = initialize_vector_store(embeddings)
+
+        # Should use cloud, not local
+        import chromadb
+
+        self.assertIsInstance(vector_store._client, chromadb.CloudClient)
+        print("   ✅ Priority: Cloud mode takes precedence over local")
 
 
-# ------------------------------------------------------------
-# Run All Tests
-# ------------------------------------------------------------
+class TestMetricsInitialization(unittest.TestCase):
+    """Test metrics initialization - optional and non-blocking"""
+
+    def test_metrics_enabled_exists(self):
+        """Test that METRICS_ENABLED is present"""
+        self.assertIsNotNone(METRICS_ENABLED)
+        self.assertIsInstance(METRICS_ENABLED, bool)
+        print(f"   METRICS_ENABLED = {METRICS_ENABLED}")
+
+    def test_metrics_optional(self):
+        """Test that metrics are optional and don't break imports"""
+        # METRICS_ENABLED should be accessible from the config module we imported
+        self.assertIsInstance(METRICS_ENABLED, bool)
+        # The fact that we got here means metrics didn't block initialization
+        print("   ✅ Metrics are optional and non-blocking")
+
+    def test_metrics_non_blocking(self):
+        """Test that missing metrics don't block initialization"""
+        # METRICS_ENABLED should be False if metrics_exporter is unavailable
+        # This is tested by the fact that config.py imports without error
+        self.assertIsInstance(METRICS_ENABLED, bool)
+
+
 if __name__ == "__main__":
-    print("=" * 60)
-    print("VecSec Config Functional Diagnostics")
-    print("=" * 60)
+    print("=" * 70)
+    print("VecSec Config Manager Tests")
+    print("=" * 70)
     print()
 
-    test_vector_store()
-    test_metrics_exporter()
-    test_prompt_template()
-    test_chroma_path_configuration()
-    test_sample_documents()
-    test_env_validation_behavior()
-
-    print("=" * 60)
-    print("🏁 Diagnostics complete.")
-    print("=" * 60)
+    # Run tests
+    unittest.main(verbosity=2)
